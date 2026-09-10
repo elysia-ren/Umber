@@ -26,7 +26,7 @@
 | 规格 | 本仓库落点 |
 |------|-----------|
 | A. External Source Database | `runtime-data/src/sources/{models_dev,litellm,openrouter,official}.rs` |
-| B. Build-time Canonical DB | `catalog-builder` → `runtime-data::pipeline::build` 产出 `Catalog` |
+| B. Build-time Canonical DB | `runtime-data::pipeline::build`，由 `model-data build` 驱动 |
 | C. Runtime Local DB | `runtime-data::store::LocalDb`（逐记录版本 + 覆盖 + 探测结果） |
 
 ## 二、实测能力（2026-09-10 真实数据）

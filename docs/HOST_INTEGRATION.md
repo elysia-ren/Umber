@@ -203,10 +203,10 @@ with Runtime() as rt:
 
 ## 8. 数据供应链（不随宿主分发）
 
-模型元数据由 `catalog-builder` 于构建期生成：
+模型元数据由 `runtime-data` 的 `model-data` CLI 于构建期生成：
 
 ```text
-catalog-builder source1.json source2.json -o catalog.json
+model-data build source1.json source2.json -o catalog.json
 ```
 
 许可证白名单门禁（`ALLOWED_LICENSES`）不通过即构建失败；产物随 Runtime

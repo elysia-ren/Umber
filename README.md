@@ -26,7 +26,7 @@ model-runtime/
 ├── runtime-ui/            UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
 ├── runtime-ffi/           Stable C ABI（拉取式）+ C/Python 绑定；唯一允许 unsafe 的 crate
 ├── runtime-data/          Model Data Pipeline & Database（上游适配器 / 规范化 / 冲突解析 / 本地库）
-└── catalog-builder/       数据供应链流水线（不随宿主分发）
+└── runtime-ffi 之外的数据侧工具见 runtime-data 的 `model-data` CLI
 ```
 
 ## 进度
