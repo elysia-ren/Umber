@@ -114,6 +114,7 @@ fn host_journey_from_settings_to_streamed_answer() {
             compatibility: Default::default(),
             evidence: vec![],
         }],
+        deployments: vec![],
     };
     let mut registry = ModelRegistry::from_catalog(&catalog).unwrap();
     let info = registry.register_deployment(deployment.clone(), Some(&catalog));

@@ -18,7 +18,7 @@
 use std::collections::BTreeMap;
 
 use runtime_model::capability::{CapabilityKind, CapabilityRecord, CapabilityStatus};
-use runtime_model::catalog::{Catalog, CatalogSource};
+use runtime_model::catalog::{Catalog, CatalogDeployment, CatalogSource};
 use runtime_model::compatibility::CompatibilityProfile;
 use runtime_model::evidence::{Evidence, EvidenceSource};
 use runtime_model::identity::{normalize_model_id, ModelIdentity};
@@ -85,13 +85,17 @@ pub struct FieldCandidates {
     pub aliases: Vec<String>,
 }
 
-/// 上游 provider → Canonical 身份键。
+/// 记录 → Canonical 身份键。
 ///
-/// 规范化规则（§9.1：只有窄而可靠的匹配）：小写、去首尾空白；
-/// provider 前缀**保留**在身份键里，因为不同 provider 的同名模型
-/// 在数据层未必是同一个 Deployment——身份合并只发生在 alias 明确时。
+/// **按裸模型名归一**：`302ai/glm-4.6`、`novita/glm-4.6`、
+/// `openrouter/glm-4.6` 是**同一个身份**（规格 X.1：同一模型经不同
+/// 服务商/Gateway 暴露仍是同一 Identity）。provider 差异属于 Deployment，
+/// 由 `deployments` 表承载（规格 X.18）。
+///
+/// 早期版本按完整 source key 分组，结果是同一个模型产出多条同 id 记录，
+/// 下游按 id 索引会互相覆盖——这是必须避免的数据腐化。
 pub fn canonical_key_of(record: &RawModelRecord) -> String {
-    normalize_model_id(&record.source_key)
+    normalize_model_id(record.bare_model_id())
 }
 
 /// 单条记录 → 候选字段集合。
@@ -298,11 +302,21 @@ pub fn resolve_group(group: &[FieldCandidates]) -> (ModelProfile, bool) {
         }
     }
 
-    // 显示名：取最长的一个（通常最有信息量），不视为冲突
+    // 显示名：取**最干净**的那个，而不是最长或第一个。
+    //
+    // 实测教训：上游的名字里常带 provider 后缀与注释——
+    // "Pro/deepseek-ai/DeepSeek-R1"、"DeepSeek V3.2 (Vertex AI (OpenAI-compatible))"、
+    // "DeepSeek V3.2 (Non-thinking Mode)"。取最长会把这类噪音挑出来给用户看，
+    // 取最短又可能丢掉版本号。因此按"是否含路径/括号注释"分级，同级取最短。
     let display_name = group
         .iter()
         .flat_map(|c| c.display_name.iter().map(|(n, _)| n.clone()))
-        .max_by_key(|n| n.len())
+        .filter(|n| !n.trim().is_empty())
+        .min_by_key(|n| {
+            let noisy = n.contains('/') || n.contains('(') || n.contains('（');
+            let nested = n.matches('(').count() + n.matches('（').count() > 1;
+            (nested as u8, noisy as u8, n.len())
+        })
         .unwrap_or_else(|| identity.canonical_id.clone());
 
     // 能力：同一能力多来源时，任一 supported 优先；显式 false 与 true 冲突时取 true 并标冲突
@@ -509,6 +523,27 @@ pub fn build(
     }
     dedup_licenses(&mut reference_only);
 
+    // provider → model 的归属表：身份合并后 provider 信息不丢，走这张表
+    let mut deployments: Vec<CatalogDeployment> = Vec::new();
+    let mut seen_deployments: std::collections::BTreeSet<(String, String)> =
+        std::collections::BTreeSet::new();
+    for record in &allowed {
+        let provider = record
+            .provider_hint
+            .clone()
+            .or_else(|| record.organization.clone());
+        let Some(provider) = provider else {
+            continue;
+        };
+        let model_id = record.bare_model_id().to_string();
+        if seen_deployments.insert((provider.to_lowercase(), model_id.clone())) {
+            deployments.push(CatalogDeployment {
+                provider: provider.to_lowercase(),
+                model_id,
+            });
+        }
+    }
+
     let candidates: Vec<FieldCandidates> = allowed.into_iter().map(|r| normalize(&r)).collect();
     let groups = group_by_identity(candidates);
 
@@ -559,6 +594,7 @@ pub fn build(
             sources: catalog_sources,
             identities,
             entries,
+            deployments,
         },
         records: metas,
         // 不可再分发的来源记录在 reference_only_sources；
@@ -780,6 +816,59 @@ mod tests {
         let profile = &out.catalog.entries[0];
         // 规格类字段：官方优先于第三方目录（§13）
         assert_eq!(profile.limits.context_window, Some(65_536));
+    }
+
+    #[test]
+    fn display_name_prefers_the_cleanest_candidate() {
+        // 实测上游名字带 provider 后缀与括号注释；取最长会把噪音挑给用户
+        let mut a = third_party("models_dev", "p/deepseek-r1");
+        a.display_name = Some("Pro/deepseek-ai/DeepSeek-R1".into());
+        let mut b = third_party("litellm", "p/deepseek-r1");
+        b.display_name = Some("DeepSeek R1".into());
+        let mut c = third_party("models_dev", "q/deepseek-r1");
+        c.display_name = Some("DeepSeek R1 (Vertex AI (OpenAI-compatible))".into());
+        let out = build(vec![a, b, c], &licenses_all(), 0);
+        assert_eq!(out.catalog.entries[0].display_name, "DeepSeek R1");
+    }
+
+    #[test]
+    fn canonical_ids_are_unique_after_merge() {
+        // 回归：同一个模型经不同 gateway 暴露，必须合并成一条身份，
+        // 否则下游按 id 查表会互相覆盖（这正是早期版本的数据腐化）。
+        let mut a = third_party("models_dev", "openrouter/glm-4.6");
+        a.provider_hint = Some("openrouter".into());
+        a.context_window = Some(200_000);
+        let mut b = third_party("litellm", "novita/glm-4.6");
+        b.provider_hint = Some("novita".into());
+        b.context_window = Some(200_000);
+        let mut c = third_party("models_dev", "zhipuai/glm-4.6");
+        c.provider_hint = Some("zhipuai".into());
+        c.context_window = Some(204_800);
+
+        let out = build(vec![a, b, c], &licenses_all(), 0);
+        assert_eq!(out.catalog.entries.len(), 1, "同一身份必须只有一条");
+        let ids: Vec<&str> = out
+            .catalog
+            .entries
+            .iter()
+            .map(|e| e.identity.canonical_id.as_str())
+            .collect();
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            ids.len(),
+            "canonical_id 在 Catalog 内必须唯一"
+        );
+
+        // 但三家 provider 的归属都保留在 deployments 里
+        assert_eq!(out.catalog.models_of_provider("zhipuai"), vec!["glm-4.6"]);
+        assert_eq!(out.catalog.models_of_provider("novita"), vec!["glm-4.6"]);
+        assert_eq!(
+            out.catalog.models_of_provider("openrouter"),
+            vec!["glm-4.6"]
+        );
     }
 
     #[test]

@@ -59,6 +59,9 @@ pub struct UiModelInfo {
     pub model_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// 归属组织 / 上游 provider 键（用于"按厂商查目录推荐"）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
     /// 只包含**已知**的能力；空 = 目录里没有该模型或目录无此字段。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<(CapabilityKind, CapabilityStatus)>,
@@ -80,6 +83,7 @@ impl UiModelInfo {
         Self {
             model_id: model_id.into(),
             display_name: None,
+            provider: None,
             capabilities: Vec::new(),
             limits: ModelLimits::default(),
             pricing: None,
@@ -109,6 +113,16 @@ pub trait SettingsBackend: Send + Sync {
     fn model_info(&self, model_id: &str) -> Option<UiModelInfo> {
         let _ = model_id;
         None
+    }
+
+    /// **按厂商**从随包目录取推荐模型（替代预置里硬编码模型名）。
+    ///
+    /// `catalog_provider_ids` 来自 `ProviderPreset`，是上游目录里的 provider 键
+    /// （如 `zhipuai` / `moonshotai`）。目录里没有该厂商时返回空——界面据此
+    /// 提示"刷新模型列表"或让用户手填，而不是显示过时的模型名。
+    fn recommend_models(&self, catalog_provider_ids: &[String], limit: usize) -> Vec<UiModelEntry> {
+        let _ = (catalog_provider_ids, limit);
+        Vec::new()
     }
 
     /// 请求 URL 预览（"请求将发送到 …"）。

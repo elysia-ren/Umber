@@ -26,8 +26,8 @@ use std::sync::Arc;
 use egui::{Context, RichText, Ui};
 use runtime_ui::{
     BackendError, CapabilityStatus, ConnectionTestState, ContextWindowEvidence, ModelEntry,
-    ProtocolKind, ProviderPreset, SettingsBackend, SettingsState, Strings, UiModelEntry,
-    UiModelInfo,
+    ModelSource, ProtocolKind, ProviderPreset, SettingsBackend, SettingsState, Strings,
+    UiModelEntry, UiModelInfo,
 };
 
 use crate::theme::{semantic, Density, ThemeMode, UiTheme};
@@ -54,6 +54,8 @@ pub struct SettingsApp {
     reveal_key: bool,
     /// 已向后端查询过知识的模型 ID（避免每帧重复查询）
     queried: std::collections::HashSet<String>,
+    /// 上次刷新的失败原因（**不静默吞掉**，否则用户点了没反应）
+    discovery_error: Option<String>,
     job: Option<Job>,
 }
 
@@ -73,6 +75,7 @@ impl SettingsApp {
             manual_model: String::new(),
             reveal_key: false,
             queried: std::collections::HashSet::new(),
+            discovery_error: None,
             job: None,
         }
     }
@@ -90,6 +93,12 @@ impl SettingsApp {
 
     pub fn state(&self) -> &SettingsState {
         &self.state
+    }
+
+    /// 首次进入时补齐推荐模型（与切换厂商走同一条路：
+    /// 按厂商查随包目录，而不是用硬编码名单）。
+    pub fn prime_recommendations(&mut self) {
+        self.refresh_recommendations();
     }
 
     pub fn state_mut(&mut self) -> &mut SettingsState {
@@ -219,7 +228,37 @@ impl SettingsApp {
             self.state.select_provider(id);
             self.connection = ConnectionTestState::Idle;
             self.request_preview = None;
+            self.discovery_error = None;
+            // 换厂商后按新厂商查目录拿推荐（而不是沿用上家的列表）
+            self.refresh_recommendations();
         }
+    }
+
+    /// 按当前厂商向 Core 要推荐模型——**查随包目录，不是硬编码名字**。
+    ///
+    /// 目录里没有该厂商时列表会是空的，界面据此提示"刷新模型列表"或手填，
+    /// 而不是显示一年前的型号。
+    fn refresh_recommendations(&mut self) {
+        let ids: Vec<String> = self
+            .state
+            .preset()
+            .catalog_provider_ids
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        if ids.is_empty() {
+            return; // 本地部署 / 自定义：没有目录来源
+        }
+        let entries: Vec<ModelEntry> = self
+            .backend
+            .recommend_models(&ids, 12)
+            .into_iter()
+            .map(|entry| {
+                let profile = self.backend.model_info(&entry.model_id);
+                ModelEntry::with_source(entry.model_id, profile, ModelSource::Catalog)
+            })
+            .collect();
+        self.state.apply_recommendations(entries);
     }
 
     /// 侧栏里的一行厂商：徽标 + 名称 + 状态点。
@@ -430,8 +469,20 @@ impl SettingsApp {
                 {
                     self.start_discovery();
                 }
+                // 无密钥时明说刷新会失败（而不是点了没反应）
+                if !self.state.keyless() && self.state.api_key().trim().is_empty() {
+                    ui.label(
+                        RichText::new(self.text("providers.refresh_needs_key"))
+                            .small()
+                            .color(colors.weak),
+                    );
+                }
             });
         });
+        if let Some(error) = &self.discovery_error {
+            let message = format!("{} {}", self.text("providers.refresh_failed"), error);
+            ui.add(egui::Label::new(RichText::new(message).small().color(colors.danger)).wrap());
+        }
         ui.add_space(4.0);
         self.model_rows(ui);
 

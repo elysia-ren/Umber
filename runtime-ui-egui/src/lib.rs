@@ -87,6 +87,8 @@ pub fn open_settings_window(params: SettingsWindowParams) -> Result<(), eframe::
             let mut app = SettingsApp::new(params.page, strings, params.backend);
             app.apply_theme(&cc.egui_ctx, params.theme, params.density, params.scale);
             app.install_system_fonts(&cc.egui_ctx);
+            // 开局就把该厂商的目录推荐填上（否则首屏模型列表是空的）
+            app.prime_recommendations();
             Ok(Box::new(app))
         }),
     )

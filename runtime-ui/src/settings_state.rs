@@ -19,6 +19,28 @@ use crate::backend::UiModelInfo;
 use crate::preset::{preset_by_id, search_presets_localized, ProviderCategory, ProviderPreset};
 use crate::schema::SettingsDraft;
 
+/// 模型条目的来源。界面需要区分"目录推荐"与"从服务实时拉到"，
+/// 刷新时也只替换对应来源的条目。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelSource {
+    /// 随包目录里按厂商匹配到的（不是硬编码，而是查目录得到）。
+    Catalog,
+    /// 从服务商 `/models` 实时拉取的。
+    Discovered,
+    /// 用户手填的。
+    Manual,
+}
+
+impl ModelSource {
+    pub fn label_key(self) -> &'static str {
+        match self {
+            ModelSource::Catalog => "model.source.catalog",
+            ModelSource::Discovered => "model.source.discovered",
+            ModelSource::Manual => "model.source.manual",
+        }
+    }
+}
+
 /// 一行的模型条目（右侧模型列表用）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModelEntry {
@@ -26,15 +48,26 @@ pub struct ModelEntry {
     pub display_name: Option<String>,
     /// 已知的模型知识；`None` 表示"目录里没有这个模型"（仍可正常使用）。
     pub profile: Option<UiModelInfo>,
+    /// 这个条目从哪来。
+    pub source: ModelSource,
 }
 
 impl ModelEntry {
     pub fn new(model_id: impl Into<String>, profile: Option<UiModelInfo>) -> Self {
+        Self::with_source(model_id, profile, ModelSource::Manual)
+    }
+
+    pub fn with_source(
+        model_id: impl Into<String>,
+        profile: Option<UiModelInfo>,
+        source: ModelSource,
+    ) -> Self {
         let model_id = model_id.into();
         Self {
             display_name: profile.as_ref().and_then(|p| p.display_name.clone()),
             model_id,
             profile,
+            source,
         }
     }
 
@@ -237,10 +270,9 @@ impl SettingsState {
         self.context_override_input.clear();
         self.probed_context = None;
         self.discovered_count = 0;
-        // 该厂商的推荐模型直接进入列表，用户不必先"获取"
-        for model in first.recommended_models {
-            self.models.push(ModelEntry::new(*model, None));
-        }
+        // 注意：这里**不注入任何模型名**。推荐模型由宿主按厂商查随包目录后
+        // 经 `apply_recommendations` 写入，实时清单由 `apply_discovery` 写入。
+        // 早期版本在这里写死了模型名（如 moonshot-v1-8k），用户看到的是过时型号。
     }
 
     // ---------- 连接配置 ----------
@@ -257,13 +289,8 @@ impl SettingsState {
         if !self.endpoint_touched || self.endpoint.trim().is_empty() {
             self.endpoint = offering.default_endpoint.to_string();
         }
-        // 协议换了，推荐模型可能不同：把新协议下的推荐补进列表
-        // （已发现的模型保留，用户不必重拉一次）
-        for model in offering.recommended_models {
-            if !self.models.iter().any(|m| m.model_id == *model) {
-                self.models.push(ModelEntry::new(*model, None));
-            }
-        }
+        // 同样不注入模型名：换协议后界面会重新向宿主请求推荐
+        let _ = offering;
     }
 
     pub fn available_protocols(&self) -> Vec<ProtocolKind> {
@@ -333,13 +360,38 @@ impl SettingsState {
             .iter_mut()
             .find(|m| m.model_id == entry.model_id)
         {
-            // 已存在则用更完整的知识替换
-            if entry.profile.is_some() {
-                *existing = entry;
-            }
+            // 已存在：合并知识（谁更完整用谁），并保留更强的来源
+            let source = if entry.profile.is_some() {
+                entry.source
+            } else {
+                existing.source
+            };
+            let merged = ModelEntry {
+                model_id: entry.model_id,
+                display_name: entry.display_name.or_else(|| existing.display_name.clone()),
+                profile: entry.profile.or_else(|| existing.profile.clone()),
+                source,
+            };
+            *existing = merged;
             return;
         }
         self.models.push(entry);
+    }
+
+    /// 写入**按厂商从目录取到的推荐模型**（宿主在切换厂商/协议后调用）。
+    ///
+    /// 只替换来自目录的条目：用户已从服务拉到的、手填的一律保留。
+    pub fn apply_recommendations(&mut self, recommended: Vec<ModelEntry>) {
+        self.models.retain(|m| m.source != ModelSource::Catalog);
+        for mut entry in recommended {
+            entry.source = ModelSource::Catalog;
+            self.add_model(entry);
+        }
+        if self.selected_model.is_none() {
+            if let Some(first) = self.models.first() {
+                self.selected_model = Some(first.model_id.clone());
+            }
+        }
     }
 
     pub fn remove_model(&mut self, model_id: &str) {
@@ -357,7 +409,10 @@ impl SettingsState {
     /// 发现结果替换列表（推荐模型保留在末尾，避免用户刚选的模型消失）。
     pub fn apply_discovery(&mut self, found: Vec<ModelEntry>) {
         self.discovered_count = found.len();
-        for entry in found {
+        // 上一轮实时结果先清掉（服务端清单可能已变），目录推荐与手填保留
+        self.models.retain(|m| m.source != ModelSource::Discovered);
+        for mut entry in found {
+            entry.source = ModelSource::Discovered;
             self.add_model(entry);
         }
         if self.selected_model.is_none() {
@@ -508,6 +563,7 @@ mod tests {
         UiModelInfo {
             model_id: "m".into(),
             display_name: Some("M".into()),
+            provider: None,
             capabilities: vec![(CapabilityKind::ToolCall, CapabilityStatus::Supported)],
             limits: ModelLimits {
                 context_window: context,
@@ -520,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn selecting_a_provider_brings_out_protocol_endpoint_and_models() {
+    fn selecting_a_provider_brings_out_protocol_and_endpoint_only() {
         let mut state = SettingsState::new();
         state.select_provider("dashscope");
         assert_eq!(
@@ -528,9 +584,79 @@ mod tests {
             "https://dashscope.aliyuncs.com/compatible-mode/v1"
         );
         assert_eq!(state.protocol(), ProtocolKind::OpenAiChat);
-        // 推荐模型直接进列表：用户不必先"获取"才能选
-        assert!(!state.models().is_empty(), "选厂商后模型列表不应为空");
-        assert!(state.models().iter().any(|m| m.model_id == "qwen-plus"));
+        // 关键契约：预置**不得**注入模型名。模型只能来自
+        // ① 宿主按厂商查目录 ② 服务 /models 实时拉取 ③ 用户手填。
+        assert!(
+            state.models().is_empty(),
+            "预置不该塞模型名（否则会出现一年前的型号）"
+        );
+    }
+
+    #[test]
+    fn recommendations_from_catalog_are_marked_and_replaceable() {
+        let mut state = SettingsState::new();
+        state.select_provider("deepseek");
+        state.apply_recommendations(vec![
+            ModelEntry::with_source("deepseek-v4-pro", None, ModelSource::Catalog),
+            ModelEntry::with_source("deepseek-v4-flash", None, ModelSource::Catalog),
+        ]);
+        assert_eq!(state.models().len(), 2);
+        assert!(state
+            .models()
+            .iter()
+            .all(|m| m.source == ModelSource::Catalog));
+        // 再写一次：目录来源被替换，不累积
+        state.apply_recommendations(vec![ModelEntry::with_source(
+            "deepseek-v4-pro",
+            None,
+            ModelSource::Catalog,
+        )]);
+        assert_eq!(state.models().len(), 1);
+    }
+
+    #[test]
+    fn discovery_replaces_only_its_own_entries() {
+        let mut state = SettingsState::new();
+        state.select_provider("deepseek");
+        state.apply_recommendations(vec![ModelEntry::with_source(
+            "catalog-model",
+            None,
+            ModelSource::Catalog,
+        )]);
+        state.add_model(ModelEntry::with_source(
+            "manual-model",
+            None,
+            ModelSource::Manual,
+        ));
+        state.apply_discovery(vec![
+            ModelEntry::with_source("live-a", None, ModelSource::Discovered),
+            ModelEntry::with_source("live-b", None, ModelSource::Discovered),
+        ]);
+        let ids = |s: &SettingsState| -> Vec<String> {
+            s.models().iter().map(|m| m.model_id.clone()).collect()
+        };
+        assert!(ids(&state).contains(&"live-a".to_string()));
+        assert!(
+            ids(&state).contains(&"catalog-model".to_string()),
+            "目录推荐不该被实时结果清掉"
+        );
+        assert!(
+            ids(&state).contains(&"manual-model".to_string()),
+            "手填条目不该被清掉"
+        );
+
+        // 再拉一次：只替换实时来源的条目
+        state.apply_discovery(vec![ModelEntry::with_source(
+            "live-c",
+            None,
+            ModelSource::Discovered,
+        )]);
+        assert!(ids(&state).contains(&"live-c".to_string()));
+        assert!(
+            !ids(&state).contains(&"live-a".to_string()),
+            "上一轮实时结果应被替换"
+        );
+        assert!(ids(&state).contains(&"catalog-model".to_string()));
     }
 
     #[test]
@@ -689,14 +815,16 @@ mod tests {
     fn switching_provider_clears_previous_models() {
         let mut state = SettingsState::new();
         state.select_provider("openai");
-        assert!(state.models().iter().any(|m| m.model_id == "gpt-4o-mini"));
+        state.apply_recommendations(vec![ModelEntry::with_source(
+            "gpt-4o-mini",
+            None,
+            ModelSource::Catalog,
+        )]);
+        assert!(!state.models().is_empty());
         state.select_provider("anthropic");
-        // 上家的模型不该留在列表里
-        assert!(!state.models().iter().any(|m| m.model_id == "gpt-4o-mini"));
-        assert!(state
-            .models()
-            .iter()
-            .any(|m| m.model_id == "claude-sonnet-4-5"));
+        // 换厂商后上家的模型必须清空（协议/端点/凭据都变了）
+        assert!(state.models().is_empty(), "换厂商应清空模型列表");
+        assert_eq!(state.selected_model(), None);
     }
 
     #[test]
@@ -755,12 +883,13 @@ mod tests {
         assert_eq!(
             categories,
             vec![
-                ProviderCategory::Official,
                 ProviderCategory::China,
+                ProviderCategory::Official,
                 ProviderCategory::Gateway,
                 ProviderCategory::Local,
                 ProviderCategory::Custom
-            ]
+            ],
+            "国内厂商必须排在最前"
         );
     }
 

@@ -34,6 +34,9 @@ struct RealBackend {
     transport: Arc<dyn HttpTransport>,
     /// 模型知识：canonical_id（规范化小写）→ 展示用知识。
     catalog: HashMap<String, UiModelInfo>,
+    /// provider → 该 provider 暴露的模型 ID（规格 X.18 的 Deployment 表）。
+    /// 推荐模型据此得出——**查表，不是硬编码模型名**。
+    provider_models: HashMap<String, Vec<String>>,
 }
 
 impl RealBackend {
@@ -50,6 +53,7 @@ impl RealBackend {
         Self {
             transport: Arc::new(RealHttpTransport::new(HttpConfig::default())),
             catalog,
+            provider_models: load_provider_models_from_env(),
         }
     }
 
@@ -145,6 +149,46 @@ impl SettingsBackend for RealBackend {
         lookup(&self.catalog, model_id).cloned()
     }
 
+    /// 按厂商**查随包目录**取推荐模型（不是硬编码模型名）。
+    ///
+    /// 目录里没有该厂商（如百度千帆尚未收录）时返回空，
+    /// 界面会提示"刷新模型列表"或让用户手填，而不是显示过时型号。
+    fn recommend_models(&self, catalog_provider_ids: &[String], limit: usize) -> Vec<UiModelEntry> {
+        if catalog_provider_ids.is_empty() || limit == 0 {
+            return Vec::new();
+        }
+        let mut ids: Vec<String> = Vec::new();
+        for provider in catalog_provider_ids {
+            if let Some(models) = self.provider_models.get(&provider.to_lowercase()) {
+                ids.extend(models.iter().cloned());
+            }
+        }
+        ids.sort();
+        ids.dedup();
+
+        // 排序：上下文窗口大的在前（通常更强/更新），再按名字，保证稳定
+        ids.sort_by(|a, b| {
+            let ctx = |id: &str| {
+                crate::lookup(&self.catalog, id)
+                    .and_then(|info| info.limits.context_window)
+                    .unwrap_or(0)
+            };
+            ctx(b).cmp(&ctx(a)).then_with(|| a.cmp(b))
+        });
+
+        ids.into_iter()
+            .take(limit)
+            .map(|model_id| {
+                let display_name = crate::lookup(&self.catalog, &model_id)
+                    .and_then(|info| info.display_name.clone());
+                UiModelEntry {
+                    model_id,
+                    display_name,
+                }
+            })
+            .collect()
+    }
+
     /// URL 预览直接调用 Adapter 的 URL 函数——与真实请求同源，不会漂移。
     fn preview_request_url(&self, draft: &SettingsDraft) -> Option<String> {
         let endpoint = Self::endpoint_of(draft).ok()?;
@@ -224,6 +268,7 @@ fn load_catalog_from_env() -> HashMap<String, UiModelInfo> {
             } else {
                 Some(profile.display_name.clone())
             },
+            provider: profile.identity.organization.clone(),
             capabilities,
             limits: profile.limits,
             pricing: profile.pricing.clone(),
@@ -241,6 +286,31 @@ fn load_catalog_from_env() -> HashMap<String, UiModelInfo> {
         }
     }
     map
+}
+
+/// 从构建产物加载 provider → 模型 的归属表。
+fn load_provider_models_from_env() -> HashMap<String, Vec<String>> {
+    let Ok(path) = std::env::var("UMER_DEMO_CATALOG") else {
+        return HashMap::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return HashMap::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return HashMap::new();
+    };
+    let catalog_value = value.get("catalog").cloned().unwrap_or(value);
+    let Ok(catalog) = serde_json::from_value::<Catalog>(catalog_value) else {
+        return HashMap::new();
+    };
+    let mut index: HashMap<String, Vec<String>> = HashMap::new();
+    for deployment in &catalog.deployments {
+        index
+            .entry(deployment.provider.to_lowercase())
+            .or_default()
+            .push(deployment.model_id.clone());
+    }
+    index
 }
 
 fn main() {

@@ -193,6 +193,7 @@ mod tests {
             sources: vec![],
             identities: vec![catalog_entry.identity.clone()],
             entries: vec![catalog_entry],
+            deployments: vec![],
         };
 
         let mut registry = ModelRegistry::new();

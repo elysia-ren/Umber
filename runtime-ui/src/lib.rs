@@ -35,6 +35,7 @@ pub use runtime_model::capability::{CapabilityKind, CapabilityStatus};
 pub use runtime_model::deployment::ProtocolKind;
 pub use schema::{FieldKind, FieldSpec, SectionSpec, SettingsDraft, SettingsPage, ValidationIssue};
 pub use settings_state::{
-    protocol_slug, resolve_context_window, ContextWindowEvidence, ModelEntry, SettingsState,
+    protocol_slug, resolve_context_window, ContextWindowEvidence, ModelEntry, ModelSource,
+    SettingsState,
 };
 pub use strings::{Strings, BUILTIN_STRINGS_EN, BUILTIN_STRINGS_ZH};
