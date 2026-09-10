@@ -181,7 +181,7 @@ runtime_shutdown(rt);
 
 ABI 硬规则（总案 §50.2）：句柄谁分配谁释放；panic 不穿越边界（全部入口
 catch_unwind）；字符串一律 UTF-8 + 显式长度；`runtime_stream_cancel` 可与
-`runtime_stream_next` 并发调用。可运行示例见 `runtime-ffi/examples/spike.c`。
+`runtime_stream_next` 并发调用。可运行示例见 `runtime-ffi/examples/host_example.c`。
 
 ABI 0.2 起，C 宿主拿到的是**和 Rust 宿主同一条真实链路**（四个协议 Adapter +
 真实 HTTP/SSE + Engine 生命周期）：

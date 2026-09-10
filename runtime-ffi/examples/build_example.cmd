@@ -1,6 +1,6 @@
 @echo off
-rem ABI spike build: Rust cdylib + MSVC C host.
-rem Usage: build_spike.cmd [debug^|release]
+rem C host example build: Rust cdylib + MSVC C host.
+rem Usage: build_example.cmd [debug^|release]
 setlocal enabledelayedexpansion
 set "CFG=%~1"
 if "%CFG%"=="" set "CFG=debug"
@@ -27,8 +27,9 @@ copy /y "target\%CFG%\runtime_ffi.dll" "%BINDIR%\" >nul || exit /b 1
 copy /y "target\%CFG%\runtime_ffi.dll.lib" "%BINDIR%\" >nul || exit /b 1
 
 call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
-cl /nologo /W4 /I "runtime-ffi\include" "runtime-ffi\examples\spike.c" /Fe:"%BINDIR%\spike.exe" /Fo:"%BINDIR%\spike.obj" /link "%BINDIR%\runtime_ffi.dll.lib" || exit /b 1
+rem /utf-8: umer.h 与示例的注释是中文，缺这个开关在 GBK 代码页下会报 C4819
+cl /nologo /W4 /utf-8 /I "runtime-ffi\include" "runtime-ffi\examples\host_example.c" /Fe:"%BINDIR%\host_example.exe" /Fo:"%BINDIR%\host_example.obj" /link "%BINDIR%\runtime_ffi.dll.lib" || exit /b 1
 
 set "PATH=%BINDIR%;%PATH%"
-"%BINDIR%\spike.exe"
+"%BINDIR%\host_example.exe"
 exit /b %ERRORLEVEL%

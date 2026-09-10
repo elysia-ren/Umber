@@ -180,7 +180,7 @@ runtime_shutdown(rt);
 Build the bundled example (Windows / MSVC):
 
 ```bat
-cl /I include examples\spike.c /Fe:spike.exe /link lib\runtime_ffi.dll.lib
+cl /I include examples\host_example.c /Fe:host_example.exe /link lib\runtime_ffi.dll.lib
 ```
 
 `runtime_stream_open` returns `UMER_ERR_NOT_CONFIGURED` when the requested
@@ -235,7 +235,7 @@ cargo clippy --all-targets -- -D warnings   # zero-warning gate
 cargo fmt                                   # formatting
 
 # C ABI example (Windows / MSVC)
-runtime-ffi\examples\build_spike.cmd debug
+runtime-ffi\examples\build_example.cmd debug
 
 # regenerate the C header from the Rust types (the single source of truth)
 cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
@@ -251,7 +251,7 @@ and Linux. Tests that use the real network or write to the real OS keychain are
 ```text
 docs/HOST_INTEGRATION.md   host integration guide (Rust, credentials, proxy, C ABI, Python)
 docs/MODEL_DATA.md         model data pipeline, evidence chain, license gate
-docs/CONTRACT_REVIEW.md    contract-by-contract self review
+docs/CONTRACT_REVIEW.md    contract reference: which code implements each contract
 docs/architecture/         V0 architecture and development plan
 ```
 

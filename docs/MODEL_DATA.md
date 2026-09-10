@@ -1,7 +1,9 @@
-# 模型数据体系（规格 X 的实施说明）
+# 模型数据体系
 
-本仓库按规格 X「Model Data System」实现了**整条数据管线**，代码在
-`runtime-data`（管线与数据库）与 `runtime-model`（知识契约）。
+模型数据的**整条管线**都在仓库内：`runtime-data` 负责管线与数据库，
+`runtime-model` 负责知识契约。设计来源见
+[`architecture/V0-架构总案.md`](architecture/V0-架构总案.md) 的 §11 数据来源模型、
+§12 Catalog Builder、§13 字段级优先级、§47 本地 Catalog、§63 外部数据使用方式。
 
 ## 一、分层与数据流
 
@@ -29,15 +31,17 @@
 | B. Build-time Canonical DB | `runtime-data::pipeline::build`，由 `model-data build` 驱动 |
 | C. Runtime Local DB | `runtime-data::store::LocalDb`（逐记录版本 + 覆盖 + 探测结果） |
 
-## 二、实测能力（2026-09-10 真实数据）
+## 二、一次真实构建的结果
 
 ```text
-models.dev    7619 条
+models.dev    7616 条
 LiteLLM       3120 条
 OpenRouter     436 条（reference-only，不进随包数据）
 ────────────────────────
-合并输出      3233 个规范身份，961 条检出字段冲突
+合并输出      3230 个规范身份，960 条检出字段冲突
 ```
+
+上游数据每月都在变，具体数字会漂移；上面的数来自一次实际构建，只用来说明量级。
 
 ### 身份合并的正确性（修过一个真实的数据腐化 bug）
 
@@ -46,7 +50,7 @@ OpenRouter     436 条（reference-only，不进随包数据）
 各产出一条 `glm-4.6` —— 3233 个身份产出 6158 条记录，**1014 个 id 重复**。
 下游按 id 索引会互相覆盖（界面上表现为"某厂商只剩一个模型"）。
 
-按规格 X.1/X.18 修正：
+修正后的分工：
 
 ```text
 身份（Identity）  按裸模型名合并：同一个模型经不同 Gateway 暴露仍是同一身份
@@ -56,9 +60,8 @@ OpenRouter     436 条（reference-only，不进随包数据）
 回归测试钉住两条不变量：`canonical_id` 在 Catalog 内唯一；
 同一模型的多个 provider 归属都保留在 `deployments` 里且可按 provider 查询。
 
-标签页效果：`glm-4.6` 合并了 35 条来源证据；`deepseek` 的归属表有 9 个模型
-（含官方的 `deepseek-chat` / `deepseek-reasoner` / `deepseek-v4-pro`），
-智谱 15、Kimi 4、阿里 55、OpenAI 130。
+举例：`glm-4.6` 合并了 35 条来源证据；`deepseek` 的归属表下有 9 个模型，
+智谱 15 个、阿里 55 个——同一个模型经不同 Gateway 暴露，仍然只算一个身份。
 
 ### 显示名择优
 
@@ -75,7 +78,7 @@ model-data inspect runtime-data/out/catalog.json
 model-data licenses
 ```
 
-## 三、上游适配器实测到的坑（都已处理并有测试钉住）
+## 三、上游数据的坑与处理（都有测试钉住）
 
 1. **单位不统一**：models.dev 的 `cost` 是每百万 token，LiteLLM 与
    OpenRouter 是**每 token**（且 OpenRouter 用字符串）。适配器各自换算，
@@ -92,14 +95,14 @@ model-data licenses
 **1. 唯一提供"每模型思考强度档位"的上游是 OpenRouter，而它是 reference-only。**
 公开 API ≠ 允许再分发，因此它不进随包 Catalog。后果是可再分发数据里
 `supported_efforts` 为空，Runtime 如实报告 `unknown` 且**不做本地降级**
-（不猜，规格 X.16）。要补齐这项能力，需要与 OpenRouter 确认数据条款，
+（不猜）。要补齐这项能力，需要与 OpenRouter 确认数据条款，
 或走官方覆盖层人工核对。
 
-**2. 冲突是常态，不是异常。** 6158 个模型里有 944 条存在字段级冲突，
+**2. 冲突是常态，不是异常。** 一次构建里 3230 个身份中有 960 条存在字段级冲突，
 `RecordMeta::has_conflict` 会标出来，两种来源的值都保留在 `evidence` 里。
-规格 X.9 明确要求"不偷偷把冲突抹掉"，实现遵循了这一点。
+契约要求"不偷偷把冲突抹掉"，实现遵循了这一点。
 
-## 五、许可与来源（规格 X.10）
+## 五、许可与来源
 
 `runtime-data/src/licenses.rs` 是白名单门禁：
 
@@ -110,7 +113,7 @@ model-data licenses
 
 ## 六、存储选型的说明
 
-逻辑表结构与规格 §5 一致，物理形态是「一表一 JSON 文件 + 原子写」而非 SQLite：
+逻辑表结构与架构总案一致，物理形态是「一表一 JSON 文件 + 原子写」而非 SQLite：
 
 - 宿主体积是硬约束，捆绑 SQLite 引擎（C 代码）会显著增大产物
 - 本地数据量级是**每个用户几十条记录**，不是百万行，索引没有价值

@@ -273,7 +273,7 @@ impl SourceFactory for DemoFactory {
             },
             ModelEvent::TextDelta {
                 block_id: text_id.clone(),
-                delta: "UMR ABI spike".into(),
+                delta: "UMR ABI demo".into(),
             },
             ModelEvent::TextEnded {
                 block_id: text_id.clone(),
@@ -285,9 +285,7 @@ impl SourceFactory for DemoFactory {
                 response: Box::new(GenerateResponse {
                     invocation_id: InvocationId::from("demo"),
                     content: vec![
-                        runtime_core::ContentBlock::Text(TextBlock::new(
-                            "Hello from UMR ABI spike",
-                        )),
+                        runtime_core::ContentBlock::Text(TextBlock::new("Hello from UMR ABI demo")),
                         runtime_core::ContentBlock::ToolCall(ToolCallBlock {
                             call_id: CallId::from("call-1"),
                             name: "noop".into(),
@@ -945,7 +943,7 @@ mod tests {
             1,
             "exactly one terminal event"
         );
-        assert!(jsons.iter().any(|j| j.contains("UMR ABI spike")));
+        assert!(jsons.iter().any(|j| j.contains("UMR ABI demo")));
     }
 
     /// 端到端：C ABI → 真实 Adapter → ScriptedTransport → Engine → 事件。

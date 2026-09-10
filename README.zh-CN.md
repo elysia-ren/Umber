@@ -173,7 +173,7 @@ runtime_shutdown(rt);
 编译自带示例（Windows / MSVC）：
 
 ```bat
-cl /I include examples\spike.c /Fe:spike.exe /link lib\runtime_ffi.dll.lib
+cl /I include examples\host_example.c /Fe:host_example.exe /link lib\runtime_ffi.dll.lib
 ```
 
 当请求的 model 没有对应部署、且没有显式开启内置 demo 源时，
@@ -225,7 +225,7 @@ cargo clippy --all-targets -- -D warnings   # 零警告门禁
 cargo fmt                                   # 格式化
 
 # C ABI 示例（Windows / MSVC）
-runtime-ffi\examples\build_spike.cmd debug
+runtime-ffi\examples\build_example.cmd debug
 
 # 由 Rust 类型重新生成 C 头文件（Rust 类型是唯一真值）
 cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
@@ -241,7 +241,7 @@ Rust stable，edition 2021，MSRV 1.75。CI 在 Windows / macOS / Linux 上跑
 ```text
 docs/HOST_INTEGRATION.md   宿主集成指南（Rust、凭据、代理、C ABI、Python）
 docs/MODEL_DATA.md         模型数据管线、证据链、许可证门禁
-docs/CONTRACT_REVIEW.md    七大契约逐条自审
+docs/CONTRACT_REVIEW.md    契约对照表：每条契约落在哪段代码
 docs/architecture/         V0 架构总案与开发计划
 ```
 
