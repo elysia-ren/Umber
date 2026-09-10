@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Invocation engine: terminal-event guarantee, four-stage timeouts, retry, partial output (总案 §23–§32)"
+description = "Invocation engine: terminal-event guarantee, four-stage timeouts, retry, partial output"
 
 [dependencies]
 umber-core = { workspace = true }

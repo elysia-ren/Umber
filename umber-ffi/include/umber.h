@@ -3,7 +3,7 @@
  * DO NOT EDIT BY HAND. Regenerate with:
  *     cbindgen --config umber-ffi/cbindgen.toml --crate umber-ffi -o umber-ffi/include/umber.h
  *
- * Shape contract: umber-ffi/src/lib.rs module docs (总案 §41.6 §50).
+ * Shape contract: umber-ffi/src/lib.rs module docs.
  * All strings are UTF-8 with explicit length. Ownership of event JSON
  * transfers to the caller on delivery; free it with runtime_string_free.
  */
@@ -78,7 +78,7 @@ extern "C" {
 #endif // __cplusplus
 
 /**
- * ABI 版本：(major << 16) | minor。宿主必须校验 major 一致（总案 §50.3）。
+ * ABI 版本：(major << 16) | minor。宿主必须校验 major 一致。
  */
 uint32_t runtime_abi_version(void);
 
@@ -217,7 +217,7 @@ int32_t runtime_stream_open(struct UmerRuntime *rt,
 int32_t runtime_stream_next(struct UmerStream *stream, uint32_t timeout_ms, struct UmerEvent *out);
 
 /**
- * 请求取消。取消语义由 Runtime Invocation 承载（总案 §25）；
+ * 请求取消。取消语义由 Runtime Invocation 承载；
  * 已关闭的流返回 OK。
  *
  * # Safety

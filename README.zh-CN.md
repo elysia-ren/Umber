@@ -1,5 +1,7 @@
 # Umber
 
+[![ci](https://github.com/elysia-ren/Umber/actions/workflows/ci.yml/badge.svg)](https://github.com/elysia-ren/Umber/actions/workflows/ci.yml)
+
 **Universal Embedded Model Runtime** — 可嵌入的统一 AI 模型运行时。随宿主软件分发、直接链接进宿主进程：把协议差异、
 模型知识、流式行为、错误分类与凭据处理统一消化，宿主只面对一套稳定的 Canonical API。
 

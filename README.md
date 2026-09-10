@@ -1,5 +1,7 @@
 # Umber
 
+[![ci](https://github.com/elysia-ren/Umber/actions/workflows/ci.yml/badge.svg)](https://github.com/elysia-ren/Umber/actions/workflows/ci.yml)
+
 **Universal Embedded Model Runtime** — an embeddable runtime that unifies AI model
 access for host applications.
 Ship it inside your product and link it into your own process: it absorbs the

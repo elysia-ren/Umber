@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Stable C ABI (pull-based) — the only crate allowed to use unsafe (总案 §41.6 §50)"
+description = "Stable C ABI (pull-based); the only crate allowed to use unsafe"
 
 [lib]
 crate-type = ["rlib", "cdylib"]

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Conformance suite: scripted fake providers, assertions, fixture format (总案 §52)"
+description = "Conformance suite: scripted fake providers, assertions, fixture format"
 
 [dependencies]
 umber-core = { workspace = true }

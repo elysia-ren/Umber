@@ -319,7 +319,7 @@ enum Plan {
 
 // ---------- C ABI ----------
 
-/// ABI 版本：(major << 16) | minor。宿主必须校验 major 一致（总案 §50.3）。
+/// ABI 版本：(major << 16) | minor。宿主必须校验 major 一致。
 #[no_mangle]
 pub extern "C" fn runtime_abi_version() -> u32 {
     (RUNTIME_ABI_MAJOR << 16) | RUNTIME_ABI_MINOR
@@ -748,7 +748,7 @@ pub unsafe extern "C" fn runtime_stream_next(
     result.unwrap_or(UMER_ERR_INTERNAL)
 }
 
-/// 请求取消。取消语义由 Runtime Invocation 承载（总案 §25）；
+/// 请求取消。取消语义由 Runtime Invocation 承载；
 /// 已关闭的流返回 OK。
 ///
 /// # Safety

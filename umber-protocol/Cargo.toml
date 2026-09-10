@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Protocol adapters: openai_chat / anthropic_messages / openai_responses / gemini (总案 §4–§5 M2–M5)"
+description = "Protocol adapters: openai_chat, anthropic_messages, openai_responses, gemini"
 
 [dependencies]
 umber-core = { workspace = true }

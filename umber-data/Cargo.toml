@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Model Data Pipeline & Database: external sources -> source adapters -> Canonical Model DB -> Runtime Local DB (规格 X)"
+description = "Model data pipeline and database: upstream sources, source adapters, canonical catalog, local DB"
 
 [dependencies]
 umber-core = { workspace = true }

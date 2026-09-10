@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Provider Adapter contract (plan 39.4/51-55)"
+description = "Provider adapter contract"
 
 [dependencies]
 umber-credential = { path = "../umber-credential" }
