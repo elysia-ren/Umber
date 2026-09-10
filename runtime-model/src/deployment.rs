@@ -15,7 +15,13 @@ use runtime_core::DeploymentId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolKind {
+    /// 线上名是 `openai_responses`，**不是** `open_ai_responses`：
+    /// `rename_all = "snake_case"` 会把 `OpenAi*` 拆成 `open_ai_*`，
+    /// 而全项目契约（UI 草稿值 / Local DB / C ABI 配置）一律用 `openai_*`。
+    /// 显式 rename 把这条隐式分歧钉死，回归测试见下方。
+    #[serde(rename = "openai_responses")]
     OpenAiResponses,
+    #[serde(rename = "openai_chat")]
     OpenAiChat,
     AnthropicMessages,
     Gemini,
@@ -52,5 +58,27 @@ mod tests {
         );
         let back: ProtocolKind = serde_json::from_str("\"provider_native\"").unwrap();
         assert_eq!(back, ProtocolKind::ProviderNative);
+    }
+
+    /// 回归：`OpenAi*` 两个变体的线上名必须与 UI 草稿值 / Local DB /
+    /// C ABI 配置一致（`openai_chat`），不能被 snake_case 拆成 `open_ai_chat`。
+    #[test]
+    fn openai_variants_use_the_contract_spelling() {
+        assert_eq!(
+            serde_json::to_string(&ProtocolKind::OpenAiChat).unwrap(),
+            "\"openai_chat\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ProtocolKind::OpenAiResponses).unwrap(),
+            "\"openai_responses\""
+        );
+        let chat: ProtocolKind = serde_json::from_str("\"openai_chat\"").unwrap();
+        assert_eq!(chat, ProtocolKind::OpenAiChat);
+        let responses: ProtocolKind = serde_json::from_str("\"openai_responses\"").unwrap();
+        assert_eq!(responses, ProtocolKind::OpenAiResponses);
+        assert_eq!(
+            serde_json::to_string(&ProtocolKind::Gemini).unwrap(),
+            "\"gemini\""
+        );
     }
 }

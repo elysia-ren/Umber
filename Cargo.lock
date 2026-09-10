@@ -2246,7 +2246,12 @@ name = "runtime-ffi"
 version = "0.1.0"
 dependencies = [
  "runtime-core",
+ "runtime-credential",
  "runtime-engine",
+ "runtime-model",
+ "runtime-protocol",
+ "runtime-provider",
+ "serde",
  "serde_json",
 ]
 

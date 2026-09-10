@@ -21,7 +21,7 @@
 
 #define RUNTIME_ABI_MAJOR 0
 
-#define RUNTIME_ABI_MINOR 1
+#define RUNTIME_ABI_MINOR 2
 
 #define UMER_OK 0
 
@@ -34,7 +34,17 @@
 #define UMER_ERR_INTERNAL -4
 
 /**
- * `runtime_stream_next` 状态：事件已交付。
+ * `runtime_stream_open` 的目标 Deployment 未配置（且未开启 demo）。
+ */
+#define UMER_ERR_NOT_CONFIGURED -5
+
+/**
+ * Catalog 读取 / 解析 / 格式版本校验失败。
+ */
+#define UMER_ERR_CATALOG -6
+
+/**
+ * `runtime_stream_next` / `runtime_status` 状态：数据已交付。
  */
 #define UMER_EVENT 1
 
@@ -53,7 +63,9 @@ typedef struct UmerRuntime UmerRuntime;
 typedef struct UmerStream UmerStream;
 
 /**
- * C 侧事件结构。`json` 为 UTF-8，调用方必须用 `runtime_string_free` 释放。
+ * C 侧数据载体。`json` 为 UTF-8，调用方必须用 `runtime_string_free` 释放。
+ *
+ * `runtime_stream_next` 用它交付事件；`runtime_status` 用它交付运行时状态。
  */
 typedef struct UmerEvent {
   uint64_t sequence;
@@ -73,10 +85,13 @@ uint32_t runtime_abi_version(void);
 /**
  * 创建 Runtime 实例。返回 NULL 表示失败。
  *
+ * 新实例**没有**任何已配置的 Deployment，demo 关闭：
+ * 必须先 `runtime_set_deployment` 或 `runtime_set_demo`。
+ *
  * # Safety
  *
  * 返回的句柄必须且只能通过 `runtime_shutdown` 释放一次。
- * 句柄可被任意线程使用；`UmerRuntime` 本身不暴露字段。
+ * 句柄可被任意线程使用（内部状态加锁）。
  */
 struct UmerRuntime *runtime_init(void);
 
@@ -91,10 +106,88 @@ struct UmerRuntime *runtime_init(void);
 void runtime_shutdown(struct UmerRuntime *rt);
 
 /**
+ * 开启 / 关闭内置 demo 事件源（默认关闭）。
+ *
+ * demo 流是**假数据**，只用于验证 ABI 形态，不连接任何 Provider。
+ * 未开启且未配置部署时 `runtime_stream_open` 返回
+ * `UMER_ERR_NOT_CONFIGURED`。
+ *
+ * # Safety
+ *
+ * `rt` 必须是有效的 Runtime 句柄。线程安全。
+ */
+int32_t runtime_set_demo(struct UmerRuntime *rt, int32_t enabled);
+
+/**
+ * 注册（或覆盖）一个 Deployment。JSON 形状见本文件 `DeploymentConfig` 文档。
+ *
+ * 同一个 `id` 重复调用即覆盖。成功返回 `UMER_OK`；
+ * JSON 不合法或 `len` 与 C 字符串长度不一致返回 `UMER_ERR_OPEN_FAILED`。
+ *
+ * # Safety
+ *
+ * `rt` 必须是有效的 Runtime 句柄；`config_json` 必须指向至少 `len`
+ * 字节可读的 UTF-8 内存。线程安全。
+ */
+int32_t runtime_set_deployment(struct UmerRuntime *rt, const char *config_json, size_t len);
+
+/**
+ * 写入一条凭据到 Runtime 的内存凭据存储。
+ *
+ * **Runtime 不持久化密钥**：进程退出即丢失。需要持久化的宿主应自己落到
+ * 系统钥匙串（见 `docs/HOST_INTEGRATION.md` §4），启动时再写入本函数。
+ * 密钥绝不进入日志、Catalog 或 Canonical Request。
+ *
+ * # Safety
+ *
+ * `rt` 必须是有效的 Runtime 句柄；`reference` / `secret` 必须是以 NUL
+ * 结尾的 UTF-8 C 字符串。线程安全。
+ */
+int32_t runtime_set_credential(struct UmerRuntime *rt, const char *reference, const char *secret);
+
+/**
+ * 加载 Canonical Catalog（模型知识：能力 / 上下文 / 价格）。
+ *
+ * 接受裸 Catalog 或 `model-data build` 的构建产物；
+ * `format_version` 不在兼容区间内即拒绝。
+ * **完全离线可用**——Catalog 是随包分发物，不是运行时网络依赖。
+ *
+ * # Safety
+ *
+ * `rt` 必须是有效的 Runtime 句柄；`path` 必须是以 NUL 结尾的 UTF-8
+ * C 字符串路径。线程安全。
+ */
+int32_t runtime_load_catalog(struct UmerRuntime *rt, const char *path);
+
+/**
+ * 读取运行时状态（JSON），用于宿主自检与排查。
+ *
+ * 形状：
+ *
+ * ```json
+ * {"abi":"0.2","deployments":1,"catalog_loaded":true,"catalog_entries":3230,
+ *  "demo_fallback":false,"configured_models":["dep-1"]}
+ * ```
+ *
+ * 交付的 JSON 归调用方所有，必须用 `runtime_string_free` 释放；
+ * 成功返回 `UMER_EVENT`。
+ *
+ * # Safety
+ *
+ * `rt` 必须是有效的 Runtime 句柄；`out` 必须指向可写的 `CUmerEvent`。
+ * 线程安全。
+ */
+int32_t runtime_status(struct UmerRuntime *rt, struct UmerEvent *out);
+
+/**
  * 打开一次 Invocation 流。
  *
  * `request_json` 是 Canonical GenerateRequest 的 UTF-8 JSON；
  * 形态校验失败返回 `UMER_ERR_OPEN_FAILED`。
+ *
+ * 路由（0.2）：`request.model` 命中已注册的 Deployment → 真实协议链路；
+ * 否则若 `runtime_set_demo(rt, 1)` → demo 流；否则
+ * `UMER_ERR_NOT_CONFIGURED`。
  *
  * # Safety
  *
@@ -146,12 +239,13 @@ int32_t runtime_stream_cancel(struct UmerStream *stream);
 void runtime_stream_close(struct UmerStream *stream);
 
 /**
- * 释放 `runtime_stream_next` 交付的事件 JSON。NULL 安全。
+ * 释放本 ABI 交付的 JSON（`runtime_stream_next` / `runtime_status`）。
+ * NULL 安全。
  *
  * # Safety
  *
- * `ptr` 必须是 `runtime_string_free` 尚未释放过的、由本 ABI 分配的
- * 指针，或为 NULL。不得释放任何其他来源的指针。
+ * `ptr` 必须是本 ABI 分配且尚未释放的指针，或为 NULL。
+ * 不得释放任何其他来源的指针。
  */
 void runtime_string_free(char *ptr);
 

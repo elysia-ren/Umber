@@ -1,7 +1,12 @@
-/* ABI spike C host: handshake -> open stream -> pull events to terminal
- * -> WOULD_BLOCK branch -> cancel API -> teardown.
- * Verifies: ABI handshake, pull-based stream, ownership (string_free),
- * NULL-safety, terminal-event guarantee.
+/* ABI spike C host: handshake -> honesty check -> demo stream -> pull events
+ * to terminal -> WOULD_BLOCK branch -> cancel API -> teardown.
+ * Verifies: ABI handshake, NOT_CONFIGURED honesty (no silent fake data),
+ * runtime_status, pull-based stream, ownership (string_free), NULL-safety,
+ * terminal-event guarantee.
+ *
+ * 真实调用（连真 Provider）不用 demo：注册部署 + 写凭据即可，
+ * 见 runtime-ffi/include/umer.h 的 runtime_set_deployment / 
+ * runtime_set_credential / runtime_load_catalog。
  */
 #include <stdio.h>
 #include <string.h>
@@ -28,9 +33,40 @@ int main(void) {
         return 1;
     }
 
-    /* 3. open stream */
+    UmerEvent ev;
+    int32_t status;
+
+    /* 3. honesty check: nothing configured and demo OFF (the default) must
+     *    fail loudly instead of silently returning built-in fake data */
+    UmerStream* refused = NULL;
+    status = runtime_stream_open(rt, REQUEST_JSON, strlen(REQUEST_JSON), &refused);
+    if (status != UMER_ERR_NOT_CONFIGURED) {
+        printf("[spike] FAIL: expected NOT_CONFIGURED, got %d\n", status);
+        runtime_shutdown(rt);
+        return 1;
+    }
+    printf("[spike] unconfigured open refused with NOT_CONFIGURED (no fake data)\n");
+
+    /* 4. explicit opt-in to the built-in demo source (fake events, no network) */
+    if (runtime_set_demo(rt, 1) != UMER_OK) {
+        printf("[spike] FAIL: runtime_set_demo\n");
+        runtime_shutdown(rt);
+        return 1;
+    }
+
+    /* 5. runtime_status: host self-check of what is configured */
+    memset(&ev, 0, sizeof(ev));
+    if (runtime_status(rt, &ev) != UMER_EVENT) {
+        printf("[spike] FAIL: runtime_status\n");
+        runtime_shutdown(rt);
+        return 1;
+    }
+    printf("[spike] status %.*s\n", (int)ev.json_len, ev.json);
+    runtime_string_free((char*)ev.json);
+
+    /* 6. open stream */
     UmerStream* stream = NULL;
-    int32_t status = runtime_stream_open(rt, REQUEST_JSON, strlen(REQUEST_JSON), &stream);
+    status = runtime_stream_open(rt, REQUEST_JSON, strlen(REQUEST_JSON), &stream);
     if (status != UMER_OK || !stream) {
         printf("[spike] FAIL: stream_open status=%d\n", status);
         runtime_shutdown(rt);
@@ -45,10 +81,9 @@ int main(void) {
         return 1;
     }
 
-    /* 5. deterministic WOULD_BLOCK: engine synthesizes Started instantly, but
+    /* 7. deterministic WOULD_BLOCK: engine synthesizes Started instantly, but
      *    the demo source throttles the first provider event by 300ms, so a
      *    5ms pull right after Started must come back WOULD_BLOCK */
-    UmerEvent ev;
     memset(&ev, 0, sizeof(ev));
     status = runtime_stream_next(stream, 2000, &ev); /* consumes Started */
     if (status != UMER_EVENT) {

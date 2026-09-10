@@ -19,6 +19,27 @@
         for event in stream:
             print(event.sequence, event.data["event"]["type"])
         print("partial:", stream.partial_text)
+
+真实调用（0.2 起；未配置且未开 demo 时 open_stream 会抛 NOT_CONFIGURED）：
+
+    with Runtime() as rt:
+        rt.set_deployment({
+            "id": "deepseek/official/openai_chat/deepseek-chat",
+            "provider_id": "deepseek",
+            "protocol": "openai_chat",          # openai_chat / openai_responses
+            "endpoint_url": "https://api.deepseek.com/v1",   # / anthropic_messages / gemini
+            "model_id": "deepseek-chat",
+            "credential_ref": "deepseek/api_key",
+        })
+        rt.set_credential("deepseek/api_key", "sk-...")   # 只在内存，进程退出即丢
+        rt.load_catalog("catalog.json")                   # 可选：离线模型知识
+        with rt.stream({"model": "deepseek/official/openai_chat/deepseek-chat",
+                        "messages": [{"role": "user",
+                                      "content": [{"type": "text", "text": "你好"}]}]}) as stream:
+            for event in stream:
+                inner = event["data"]["event"]
+                if inner["type"] == "text_delta":
+                    print(inner["delta"], end="", flush=True)
 """
 
 from __future__ import annotations
@@ -31,13 +52,15 @@ from typing import Iterator, Optional
 
 # ---- ABI 常量（与 runtime-ffi/src/lib.rs 一致）----
 ABI_MAJOR = 0
-ABI_MINOR = 1
+ABI_MINOR = 2
 
 UMER_OK = 0
 UMER_ERR_NULL_ARGUMENT = -1
 UMER_ERR_ABI_MISMATCH = -2
 UMER_ERR_OPEN_FAILED = -3
 UMER_ERR_INTERNAL = -4
+UMER_ERR_NOT_CONFIGURED = -5
+UMER_ERR_CATALOG = -6
 
 UMER_EVENT = 1
 UMER_CLOSED = 2
@@ -48,6 +71,8 @@ _ERROR_NAMES = {
     UMER_ERR_ABI_MISMATCH: "ABI_MISMATCH",
     UMER_ERR_OPEN_FAILED: "OPEN_FAILED",
     UMER_ERR_INTERNAL: "INTERNAL",
+    UMER_ERR_NOT_CONFIGURED: "NOT_CONFIGURED",
+    UMER_ERR_CATALOG: "CATALOG",
 }
 
 TERMINAL_EVENT_TYPES = {"completed", "failed", "cancelled"}
@@ -71,6 +96,15 @@ class UmerEvent(ctypes.Structure):
         ("json", ctypes.c_void_p),
         ("json_len", ctypes.c_size_t),
     ]
+
+
+def _take_json(lib, out: "UmerEvent") -> str:
+    """读出 ABI 交付的 JSON 并释放所有权（规则：谁分配谁释放，§50.2）。"""
+    try:
+        raw = ctypes.string_at(out.json, out.json_len)
+    finally:
+        lib.runtime_string_free(out.json)
+    return raw.decode("utf-8")
 
 
 def _library_candidates() -> list[str]:
@@ -145,13 +179,7 @@ class Stream:
         if status != UMER_EVENT:
             raise UmerAbiError(status, "runtime_stream_next")
 
-        try:
-            raw = ctypes.string_at(out.json, out.json_len)
-        finally:
-            # 所有权规则：交付给调用方，必须释放（§50.2）
-            self._lib.runtime_string_free(out.json)
-
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(_take_json(self._lib, out))
         event = {"sequence": out.sequence, "data": payload}
         self.events.append(event)
 
@@ -248,8 +276,90 @@ class Runtime:
         lib.runtime_stream_cancel.argtypes = [ctypes.c_void_p]
         lib.runtime_stream_cancel.restype = ctypes.c_int32
         lib.runtime_stream_close.argtypes = [ctypes.c_void_p]
+        lib.runtime_set_demo.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+        lib.runtime_set_demo.restype = ctypes.c_int32
+        lib.runtime_set_deployment.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+        ]
+        lib.runtime_set_deployment.restype = ctypes.c_int32
+        lib.runtime_set_credential.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+        ]
+        lib.runtime_set_credential.restype = ctypes.c_int32
+        lib.runtime_load_catalog.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        lib.runtime_load_catalog.restype = ctypes.c_int32
+        lib.runtime_status.argtypes = [ctypes.c_void_p, ctypes.POINTER(UmerEvent)]
+        lib.runtime_status.restype = ctypes.c_int32
+        lib.runtime_set_demo.argtypes = [ctypes.c_void_p, ctypes.c_int32]
+        lib.runtime_set_demo.restype = ctypes.c_int32
+        lib.runtime_set_deployment.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_size_t,
+        ]
+        lib.runtime_set_deployment.restype = ctypes.c_int32
+        lib.runtime_set_credential.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+        ]
+        lib.runtime_set_credential.restype = ctypes.c_int32
+        lib.runtime_load_catalog.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        lib.runtime_load_catalog.restype = ctypes.c_int32
+        lib.runtime_status.argtypes = [ctypes.c_void_p, ctypes.POINTER(UmerEvent)]
+        lib.runtime_status.restype = ctypes.c_int32
         # 用 c_void_p 而非 c_char_p：后者会把 Python bytes 的缓冲区指针传过去
         lib.runtime_string_free.argtypes = [ctypes.c_void_p]
+
+    # ---- 配置（真实链路，0.2 起）----
+
+    def set_demo(self, enabled: bool = True) -> None:
+        """开启内置 demo 事件源。假数据，仅用于验证 ABI 形态，默认关闭。"""
+        code = self._lib.runtime_set_demo(self._handle, 1 if enabled else 0)
+        if code != UMER_OK:
+            raise UmerAbiError(code, "runtime_set_demo")
+
+    def set_deployment(self, config: dict) -> None:
+        """注册（或覆盖）一个 Deployment。
+
+        必填键：id / protocol / endpoint_url / model_id；
+        可选：provider_id（默认 custom）、endpoint_id、credential_ref。
+        请求里的 model 必须等于这里的 id。
+        """
+        payload = json.dumps(config, ensure_ascii=False).encode("utf-8")
+        code = self._lib.runtime_set_deployment(self._handle, payload, len(payload))
+        if code != UMER_OK:
+            raise UmerAbiError(code, "runtime_set_deployment")
+
+    def set_credential(self, reference: str, secret: str) -> None:
+        """写入一条凭据到 Runtime 内存存储。
+
+        Runtime 不持久化密钥（进程退出即丢）。需要持久化的宿主应自己
+        落到系统钥匙串，启动时再写入本函数。
+        """
+        code = self._lib.runtime_set_credential(
+            self._handle, reference.encode("utf-8"), secret.encode("utf-8")
+        )
+        if code != UMER_OK:
+            raise UmerAbiError(code, "runtime_set_credential")
+
+    def load_catalog(self, path: str) -> None:
+        """加载 Canonical Catalog（离线模型知识：能力 / 上下文 / 价格）。"""
+        code = self._lib.runtime_load_catalog(self._handle, os.fsencode(path))
+        if code != UMER_OK:
+            raise UmerAbiError(code, "runtime_load_catalog")
+
+    def status(self) -> dict:
+        """运行时状态：已配置部署 / 目录条目 / demo 开关。"""
+        out = UmerEvent()
+        code = self._lib.runtime_status(self._handle, ctypes.byref(out))
+        if code != UMER_EVENT:
+            raise UmerAbiError(code, "runtime_status")
+        return json.loads(_take_json(self._lib, out))
 
     def open_stream(self, request_json: str) -> Stream:
         payload = request_json.encode("utf-8")
@@ -275,13 +385,19 @@ class Runtime:
 
 
 def main() -> int:
-    """最小自检：打开 demo 流，拉取到终结事件。"""
+    """最小自检：开启 demo 流，拉取到终结事件。
+
+    demo 是内置假事件源，只验证 ABI 形态（握手 / 拉取 / 所有权 / 终结保证）。
+    真实调用见模块文档的"真实调用"示例。
+    """
     request = {
         "model": "demo",
         "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
     }
     with Runtime() as rt:
         print(f"[py] abi {rt.abi_version[0]}.{rt.abi_version[1]}")
+        rt.set_demo()
+        print(f"[py] status {rt.status()}")
         with rt.stream(request) as stream:
             terminals = 0
             for event in stream:

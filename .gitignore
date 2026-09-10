@@ -9,3 +9,7 @@ runtime-data/out/
 
 # 本地数据
 *.local
+
+# Python 缓存（绑定目录会生成）
+__pycache__/
+*.pyc
