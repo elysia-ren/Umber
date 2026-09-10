@@ -1,4 +1,4 @@
-"""Universal Embedded Model Runtime — Python ctypes 绑定。
+"""Umber（Universal Embedded Model Runtime）— Python ctypes 绑定。
 
 设计要点（对应总案 §50 的 ABI 规则）：
 

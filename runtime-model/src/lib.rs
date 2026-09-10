@@ -1,4 +1,4 @@
-//! Universal Embedded Model Runtime — Model Intelligence 契约类型。
+//! Umber — Model Intelligence 契约类型。
 //!
 //! 本 crate 覆盖总案 §41.2 ModelProfile Contract 与 §41.3 CapabilityRecord
 //! Contract，以及 §13 的字段级数据优先级仲裁。

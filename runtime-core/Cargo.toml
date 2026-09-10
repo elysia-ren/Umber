@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Canonical API contract types for the Universal Embedded Model Runtime (总案 §41.1)"
+description = "Canonical API contract types for Umber (总案 §41.1)"
 
 [dependencies]
 serde = { workspace = true }

@@ -1,6 +1,6 @@
 # 宿主集成指南
 
-本文档面向把 Universal Embedded Model Runtime 集成进自己软件的开发者。
+本文档面向把 Umber（Universal Embedded Model Runtime）集成进自己软件的开发者。
 契约定义以代码为准（Rust 类型是唯一真值），本文只讲"怎么用"。
 
 ## 1. 最小接入（Rust）

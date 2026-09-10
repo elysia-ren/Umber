@@ -1,6 +1,7 @@
-# Universal Embedded Model Runtime
+# Umber
 
-An embeddable runtime that unifies AI model access for host applications.
+**Universal Embedded Model Runtime** — an embeddable runtime that unifies AI model
+access for host applications.
 Ship it inside your product and link it into your own process: it absorbs the
 protocol differences, model knowledge, streaming behaviour, error taxonomy and
 credential handling, so your code only ever talks to one stable Canonical API.

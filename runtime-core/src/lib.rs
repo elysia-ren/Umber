@@ -1,4 +1,4 @@
-//! Universal Embedded Model Runtime — Canonical API 契约类型。
+//! Umber — Canonical API 契约类型。
 //!
 //! 本 crate 是总案 §41.1 Canonical API Contract 的唯一真值：
 //! 所有 Provider 最终必须映射到这里，Provider 类型不得出现在本 crate。
