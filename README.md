@@ -242,6 +242,13 @@ runtime-ffi\examples\build_example.cmd debug
 cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
 ```
 
+On Linux, `runtime-credential-os` reaches the Secret Service API through
+`libdbus`, so the build needs `libdbus-1-dev` and `pkg-config`:
+
+```bash
+sudo apt-get install -y libdbus-1-dev pkg-config
+```
+
 Rust stable, edition 2021, MSRV 1.75. CI runs `cargo fmt --check`,
 `cargo clippy --all-targets -- -D warnings` and `cargo test` on Windows, macOS
 and Linux. Tests that use the real network or write to the real OS keychain are

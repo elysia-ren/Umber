@@ -231,6 +231,13 @@ runtime-ffi\examples\build_example.cmd debug
 cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
 ```
 
+Linux 上 `runtime-credential-os` 经 `libdbus` 访问 Secret Service，构建需要
+`libdbus-1-dev` 与 `pkg-config`：
+
+```bash
+sudo apt-get install -y libdbus-1-dev pkg-config
+```
+
 Rust stable，edition 2021，MSRV 1.75。CI 在 Windows / macOS / Linux 上跑
 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings` 与 `cargo test`。
 需要真实网络或写真实系统钥匙串的测试都标了 `#[ignore]` 且需显式开启，
