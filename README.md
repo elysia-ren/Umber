@@ -4,8 +4,8 @@
 把协议差异 / 模型知识 / 流式行为 / 错误 / 凭据统一消化，
 宿主只面对一套稳定的 Canonical API。
 
-- 架构总案：`../Universal Embedded Model Runtime：V0 架构总案（修订版）.md`
-- 开发计划：`../Universal Embedded Model Runtime：开发计划.md`
+- 架构总案：[`docs/architecture/V0-架构总案.md`](docs/architecture/V0-架构总案.md)（初版存于 [`docs/architecture/V0-架构总案-初版.md`](docs/architecture/V0-架构总案-初版.md)）
+- 开发计划：[`docs/architecture/开发计划.md`](docs/architecture/开发计划.md)
 - 契约自审：`docs/CONTRACT_REVIEW.md`
 - **宿主集成指南：`docs/HOST_INTEGRATION.md`**
 
