@@ -167,6 +167,11 @@ fn system_proxy() -> Option<String> {
 
 /// Windows 的 `ProxyServer` 有两种写法：
 /// `127.0.0.1:7897` 或 `http=host:port;https=host:port`。
+///
+/// 只有 Windows 的 `system_proxy` 会调用它（macOS 走 scutil，Linux 无系统代理）。
+/// 在其它平台保留编译，是为了让下面的解析测试在三平台都跑到；
+/// 因此这里显式声明"非 Windows 下可能未使用"，而不是让 `-D warnings` 把它当死代码。
+#[cfg_attr(not(windows), allow(dead_code))]
 fn normalize_proxy_server(server: &str) -> Option<String> {
     let server = server.trim();
     if server.is_empty() {
@@ -192,6 +197,9 @@ fn normalize_proxy_server(server: &str) -> Option<String> {
     Some(with_scheme(server))
 }
 
+/// 给 `host:port` 补上 `http://`；已带 scheme 的原样返回。
+/// 同样只被 Windows 分支与解析测试使用。
+#[cfg_attr(not(windows), allow(dead_code))]
 fn with_scheme(addr: &str) -> String {
     if addr.contains("://") {
         addr.to_string()
