@@ -10,6 +10,7 @@ members = [
     "runtime-provider",
     "runtime-protocol",
     "runtime-ui",
+    "runtime-ui-egui",
     "runtime-ffi",
     "catalog-builder",
 ]

@@ -12,10 +12,16 @@
 
 #![forbid(unsafe_code)]
 
+pub mod backend;
 pub mod discovery;
 pub mod schema;
 pub mod strings;
 
+pub use backend::{
+    BackendError, ConnectionReport, ConnectionTestState, SettingsBackend, UiModelInfo,
+};
+// 能力类型随 UiModelInfo 一起再导出：UI 层只依赖 runtime-ui 一个契约面
 pub use discovery::{DiscoverySession, DiscoveryState, UiModelEntry};
+pub use runtime_model::capability::{CapabilityKind, CapabilityStatus};
 pub use schema::{FieldKind, FieldSpec, SectionSpec, SettingsDraft, SettingsPage, ValidationIssue};
 pub use strings::{Strings, BUILTIN_STRINGS_EN, BUILTIN_STRINGS_ZH};

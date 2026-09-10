@@ -75,6 +75,27 @@ pub const BUILTIN_STRINGS_ZH: &[(&str, &str)] = &[
     ("protocol.openai_responses", "OpenAI Responses"),
     ("protocol.anthropic_messages", "Anthropic Messages"),
     ("protocol.gemini", "Gemini"),
+    // 模型默认值（思考强度，§21.1）
+    ("settings.provider.model_defaults", "模型默认值"),
+    ("settings.provider.reasoning_effort", "思考强度"),
+    (
+        "settings.provider.reasoning_effort.help",
+        "按请求可再覆盖。实际生效档位取决于模型支持情况，不支持时由 Runtime 就近降级。",
+    ),
+    ("reasoning.minimal", "最小"),
+    ("reasoning.low", "低"),
+    ("reasoning.medium", "中"),
+    ("reasoning.high", "高"),
+    // 发现 / 连接测试（UISpec 应用层使用）
+    ("discovery.title", "模型获取"),
+    ("discovery.auto", "自动获取模型"),
+    ("discovery.manual.add", "手动填写模型 ID"),
+    ("discovery.add", "添加"),
+    ("connection.testing", "正在测试连接…"),
+    ("connection.latency", "延迟"),
+    ("settings.save", "保存"),
+    ("settings.saved", "已保存"),
+    ("models.none", "尚未选择模型"),
     // 校验
     ("validation.required", "此项必填"),
     ("validation.pattern", "格式不正确"),
@@ -120,6 +141,25 @@ pub const BUILTIN_STRINGS_EN: &[(&str, &str)] = &[
     ("protocol.openai_responses", "OpenAI Responses"),
     ("protocol.anthropic_messages", "Anthropic Messages"),
     ("protocol.gemini", "Gemini"),
+    ("settings.provider.model_defaults", "Model Defaults"),
+    ("settings.provider.reasoning_effort", "Reasoning Effort"),
+    (
+        "settings.provider.reasoning_effort.help",
+        "Can be overridden per request. The effective level depends on model support; the Runtime downgrades to the nearest supported level.",
+    ),
+    ("reasoning.minimal", "Minimal"),
+    ("reasoning.low", "Low"),
+    ("reasoning.medium", "Medium"),
+    ("reasoning.high", "High"),
+    ("discovery.title", "Model Discovery"),
+    ("discovery.auto", "Fetch models"),
+    ("discovery.manual.add", "Enter model ID manually"),
+    ("discovery.add", "Add"),
+    ("connection.testing", "Testing connection…"),
+    ("connection.latency", "Latency"),
+    ("settings.save", "Save"),
+    ("settings.saved", "Saved"),
+    ("models.none", "No model selected yet"),
     ("validation.required", "This field is required"),
     ("validation.pattern", "Invalid format"),
     (
@@ -191,6 +231,54 @@ mod tests {
         let mut session = DiscoverySession::new();
         session.begin().unwrap();
         session.fail("discovery.no_model_list").unwrap();
+    }
+
+    #[test]
+    fn app_layer_keys_resolve_in_both_locales() {
+        // egui 参考实现使用的全部 key（schema 覆盖测试之外）
+        const APP_KEYS: &[&str] = &[
+            "settings.provider.model_defaults",
+            "settings.provider.reasoning_effort",
+            "settings.provider.reasoning_effort.help",
+            "reasoning.minimal",
+            "reasoning.low",
+            "reasoning.medium",
+            "reasoning.high",
+            "discovery.title",
+            "discovery.auto",
+            "discovery.manual.add",
+            "discovery.add",
+            "discovery.in_progress",
+            "connection.testing",
+            "connection.ok",
+            "connection.failed",
+            "connection.latency",
+            "settings.save",
+            "settings.saved",
+            "models.none",
+            "model.capabilities",
+            "model.capability.unknown",
+        ];
+        for language in ["zh-CN", "en"] {
+            let strings = Strings::builtin(language).unwrap();
+            for key in APP_KEYS {
+                assert!(strings.has(key), "{language} 缺少 key: {key}");
+            }
+        }
+        // 思考强度选项与 schema 中 Select options 的 value 一致（§21.1）
+        let page = SettingsPage::provider_settings();
+        let field = page
+            .sections
+            .iter()
+            .flat_map(|s| s.fields.iter())
+            .find(|f| f.id == "default_reasoning_effort")
+            .expect("reasoning effort field must exist");
+        let values: Vec<&str> = match &field.kind {
+            FieldKind::Select { options } => options.iter().map(|o| o.value.as_str()).collect(),
+            _ => panic!("reasoning effort must be a select"),
+        };
+        assert_eq!(values, ["minimal", "low", "medium", "high"]);
+        assert_eq!(field.default.as_deref(), Some("medium"));
     }
 
     #[test]

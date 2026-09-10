@@ -162,6 +162,38 @@ impl SettingsPage {
                     ],
                 },
                 SectionSpec {
+                    title_key: "settings.provider.model_defaults".into(),
+                    fields: vec![FieldSpec {
+                        id: "default_reasoning_effort".into(),
+                        label_key: "settings.provider.reasoning_effort".into(),
+                        kind: FieldKind::Select {
+                            options: vec![
+                                SelectOption {
+                                    value: "minimal".into(),
+                                    label_key: "reasoning.minimal".into(),
+                                },
+                                SelectOption {
+                                    value: "low".into(),
+                                    label_key: "reasoning.low".into(),
+                                },
+                                SelectOption {
+                                    value: "medium".into(),
+                                    label_key: "reasoning.medium".into(),
+                                },
+                                SelectOption {
+                                    value: "high".into(),
+                                    label_key: "reasoning.high".into(),
+                                },
+                            ],
+                        },
+                        // Medium 是 Canonical 默认档位（§21.1）：该档位不向协议发字段
+                        default: Some("medium".into()),
+                        required: true,
+                        pattern: None,
+                        help_key: Some("settings.provider.reasoning_effort.help".into()),
+                    }],
+                },
+                SectionSpec {
                     title_key: "settings.provider.probe".into(),
                     fields: vec![FieldSpec {
                         id: "active_probe".into(),

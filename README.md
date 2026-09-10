@@ -44,16 +44,37 @@ model-runtime/
 | M7 Probe | 完成：Passive 白名单强制 / Active 显式开启 / 四类失效触发 |
 | M8 Catalog Builder | 完成：规范化 / 身份合并 / 冲突检测 / 许可证门禁 / CLI |
 | M9 FFI 稳定化 | 完成：C ABI + **系统代理发现** + **OS 凭据三档回退** + cbindgen 生成头文件 + Python ctypes 绑定 + C 宿主示例 |
-| M10 Runtime UI | 完成：UISpec 数据契约（schema / 校验 / 发现状态机 / 双语 key 全覆盖测试） |
+| M10 Runtime UI | **完成**：UISpec 数据契约 + **egui/eframe 参考实现**（主题 token 明暗双套 / 密度 / 缩放 / 系统中文字体 / schema 驱动渲染 / 无头帧测试 / settings-demo 演示，实测 exe 6.7 MB） |
 | M11 集成与发布 | 完成：宿主集成指南 + 端到端验收 + `contract-v1` 标记 |
 
 ## 质量状态
 
 ```text
-149 个测试通过（148 pass + 1 ignored 写真实钥匙串）
+155 个测试通过（154 pass + 1 ignored 写真实钥匙串）
 cargo clippy -D warnings 零警告   |   cargo fmt 干净
 真实网络验证：8/8 通过（含 DeepSeek 真实流式生成、工具调用、中途取消）
+设置窗口实测（release）：exe 6.7 MB，窗口正常启动渲染（RSS ~120 MB，见 UI 选型节）
 ```
+
+## UI 技术选型（egui/eframe，已实施）
+
+选型约束：体积小 / 内存小 / 性能好 / 现代观感 / **零商用风险**。
+排除 Electron（用户明确要求）；排除 Slint（免版税档的归属义务与
+"不得暴露 Slint API"条款同嵌入型组件冲突，embedded 设备不在覆盖内）。
+
+`runtime-ui-egui` 是**参考实现，可替换**（视觉不是契约，§38）：
+
+- 只依赖 `runtime-ui` 数据契约，不碰网络 / 文件 / 凭据——动作全走 `SettingsBackend`
+- 表单由 schema 驱动渲染：契约加字段，UI 代码零改动跟随
+- 明暗双主题 token + Compact/Cozy 密度 + `pixels_per_point` 缩放（§38 四渲染参数）
+- 中文回退字体从系统加载（微软雅黑 / 苹方 / Noto CJK），不打包字体（省 10–20 MB）
+- 无头帧测试：不开窗口即可验证完整渲染路径
+- 实测（Windows / release）：exe 6.7 MB；RSS ~120 MB，主要来自 glow/GL 与 winit。
+  待调优项：裁剪 accesskit、按需重绘（`request_repaint` 节流）、必要时评估
+  iced+tiny-skia 纯软渲染路线；**是调优空间，不是选型缺陷**
+- 思考强度控件已进 schema（`default_reasoning_effort`，§21.1 四档位）；
+  就近降级与生效档位回写仍待实现（见"已知缺口"）
+
 
 ## 真实网络验证结果
 
