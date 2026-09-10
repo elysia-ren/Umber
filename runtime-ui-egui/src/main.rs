@@ -137,16 +137,15 @@ impl RealBackend {
         }
     }
 
-    /// 本次会话的凭据：优先用用户刚输入的，否则回落到已保存的（§32）。
+    /// 本次会话的凭据：优先用用户刚输入的 `api_key`，否则回落到已保存的（§32）。
     ///
     /// 只读回内存供本次调用使用，密钥不进入任何配置文件。
-    fn credentials_for(&self, draft: &SettingsDraft) -> InMemoryCredentialStore {
+    fn credentials_for(&self, api_key: Option<&str>) -> InMemoryCredentialStore {
         let store = InMemoryCredentialStore::new();
-        let provided = draft
-            .values
-            .get("api_key")
-            .filter(|k| !k.trim().is_empty())
-            .cloned();
+        let provided = api_key
+            .map(str::trim)
+            .filter(|k| !k.is_empty())
+            .map(str::to_string);
         let key = provided.or_else(|| {
             let guard = self.store.lock().ok()?;
             let bundle = guard.as_ref()?;
@@ -179,9 +178,15 @@ impl RealBackend {
 }
 
 impl SettingsBackend for RealBackend {
-    fn test_connection(&self, draft: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+    fn test_connection(
+        &self,
+        draft: &SettingsDraft,
+        api_key: Option<&str>,
+    ) -> Result<ConnectionReport, BackendError> {
         let endpoint = Self::endpoint_of(draft)?;
-        let credentials = self.credentials_for(draft);
+        // 关键：用户刚输入的密钥必须送到这里，否则请求没带 key，
+        // 只会拿到 provider 的 "Authentication Fails"
+        let credentials = self.credentials_for(api_key);
         let adapter = Self::adapter_of(draft, self.transport.clone());
         let started = std::time::Instant::now();
         // 连接测试 = GET /models（Passive；§17.1）
@@ -193,9 +198,13 @@ impl SettingsBackend for RealBackend {
         })
     }
 
-    fn discover(&self, draft: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError> {
+    fn discover(
+        &self,
+        draft: &SettingsDraft,
+        api_key: Option<&str>,
+    ) -> Result<Vec<UiModelEntry>, BackendError> {
         let endpoint = Self::endpoint_of(draft)?;
-        let credentials = self.credentials_for(draft);
+        let credentials = self.credentials_for(api_key);
         let adapter = Self::adapter_of(draft, self.transport.clone());
         let models = adapter
             .discover_models(&endpoint, &credentials, &CredentialRef::from(KEY_REF))

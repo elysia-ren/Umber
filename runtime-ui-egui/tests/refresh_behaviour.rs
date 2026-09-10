@@ -43,11 +43,19 @@ impl StubBackend {
 }
 
 impl SettingsBackend for StubBackend {
-    fn test_connection(&self, _: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+    fn test_connection(
+        &self,
+        _: &SettingsDraft,
+        _: Option<&str>,
+    ) -> Result<ConnectionReport, BackendError> {
         Ok(ConnectionReport { latency_ms: 1 })
     }
 
-    fn discover(&self, _: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError> {
+    fn discover(
+        &self,
+        _: &SettingsDraft,
+        _: Option<&str>,
+    ) -> Result<Vec<UiModelEntry>, BackendError> {
         self.discover_calls
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match &self.discover_result {
@@ -167,6 +175,99 @@ fn backend_without_discovery_support_reports_empty_result_but_no_crash() {
 }
 
 #[test]
+fn the_key_typed_in_the_ui_reaches_the_backend() {
+    // 回归：曾经 to_draft() 不含密钥，用户填了 key 请求仍然不带凭据，
+    // 于是永远拿到 provider 的 "Authentication Fails"。
+    struct KeyCapturing {
+        seen: std::sync::Mutex<Vec<Option<String>>>,
+    }
+    impl SettingsBackend for KeyCapturing {
+        fn test_connection(
+            &self,
+            _: &SettingsDraft,
+            api_key: Option<&str>,
+        ) -> Result<ConnectionReport, BackendError> {
+            self.seen.lock().unwrap().push(api_key.map(str::to_string));
+            Ok(ConnectionReport { latency_ms: 1 })
+        }
+        fn discover(
+            &self,
+            _: &SettingsDraft,
+            api_key: Option<&str>,
+        ) -> Result<Vec<UiModelEntry>, BackendError> {
+            self.seen.lock().unwrap().push(api_key.map(str::to_string));
+            Ok(vec![UiModelEntry {
+                model_id: "m".into(),
+                display_name: None,
+            }])
+        }
+    }
+
+    let backend = Arc::new(KeyCapturing {
+        seen: std::sync::Mutex::new(Vec::new()),
+    });
+    let mut app = SettingsApp::new(
+        runtime_ui::SettingsPage::provider_settings(),
+        runtime_ui::Strings::builtin("zh-CN").unwrap(),
+        backend.clone(),
+    );
+    app.state_mut().select_provider("deepseek");
+    app.state_mut().set_api_key("sk-TYPED-BY-USER");
+
+    app.trigger_discovery();
+    assert!(wait_until_idle(&mut app));
+    app.trigger_connection_test();
+    assert!(wait_until_idle(&mut app));
+
+    let seen = backend.seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 2, "刷新与测试连接都应调用后端");
+    for key in &seen {
+        assert_eq!(
+            key.as_deref(),
+            Some("sk-TYPED-BY-USER"),
+            "界面里填的密钥必须送到后端，否则请求不带凭据"
+        );
+    }
+}
+
+#[test]
+fn an_empty_key_field_means_use_the_saved_one() {
+    // 用户没重新输入时应传 None（让后端沿用已保存的密钥），
+    // 而不是传空串把凭据清掉
+    struct KeyCapturing(std::sync::Mutex<Vec<Option<String>>>);
+    impl SettingsBackend for KeyCapturing {
+        fn test_connection(
+            &self,
+            _: &SettingsDraft,
+            _: Option<&str>,
+        ) -> Result<ConnectionReport, BackendError> {
+            Ok(ConnectionReport { latency_ms: 1 })
+        }
+        fn discover(
+            &self,
+            _: &SettingsDraft,
+            api_key: Option<&str>,
+        ) -> Result<Vec<UiModelEntry>, BackendError> {
+            self.0.lock().unwrap().push(api_key.map(str::to_string));
+            Ok(vec![])
+        }
+    }
+    let backend = Arc::new(KeyCapturing(std::sync::Mutex::new(Vec::new())));
+    let mut app = SettingsApp::new(
+        runtime_ui::SettingsPage::provider_settings(),
+        runtime_ui::Strings::builtin("zh-CN").unwrap(),
+        backend.clone(),
+    );
+    app.state_mut().select_provider("deepseek");
+    // 刻意只填空格
+    app.state_mut().set_api_key("   ");
+    app.trigger_discovery();
+    assert!(wait_until_idle(&mut app));
+    let seen = backend.0.lock().unwrap().clone();
+    assert_eq!(seen, vec![None], "空白输入应传 None，而不是空串");
+}
+
+#[test]
 fn request_url_preview_comes_from_the_backend() {
     // 预览必须由后端计算（与 Adapter 同源），UI 不自己拼
     let backend = StubBackend::ok(&["m"]);
@@ -189,10 +290,18 @@ fn switching_provider_asks_the_backend_again() {
         recommended: std::sync::Mutex<Vec<String>>,
     }
     impl SettingsBackend for Recommending {
-        fn test_connection(&self, _: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+        fn test_connection(
+            &self,
+            _: &SettingsDraft,
+            _: Option<&str>,
+        ) -> Result<ConnectionReport, BackendError> {
             Ok(ConnectionReport { latency_ms: 1 })
         }
-        fn discover(&self, _: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError> {
+        fn discover(
+            &self,
+            _: &SettingsDraft,
+            _: Option<&str>,
+        ) -> Result<Vec<UiModelEntry>, BackendError> {
             Ok(vec![])
         }
         fn recommend_models(&self, ids: &[String], _limit: usize) -> Vec<UiModelEntry> {

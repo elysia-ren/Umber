@@ -134,10 +134,23 @@ impl UiModelInfo {
 /// 以保证渲染线程不因网络而卡顿（egui 立即模式的要求）。
 pub trait SettingsBackend: Send + Sync {
     /// 测试连接。语义必须是 Passive（§17.1）：不得发送生成请求。
-    fn test_connection(&self, draft: &SettingsDraft) -> Result<ConnectionReport, BackendError>;
+    ///
+    /// `api_key` 是**本次会话**用户刚输入的密钥（`None` = 沿用已保存的）。
+    /// 它与 `draft` 分开传递，因为：
+    /// - `draft` 会被序列化（配置落盘），绝不能含密钥（§32）
+    /// - 密钥只在内存里活一次请求，用完即弃，不进任何持久化结构
+    fn test_connection(
+        &self,
+        draft: &SettingsDraft,
+        api_key: Option<&str>,
+    ) -> Result<ConnectionReport, BackendError>;
 
-    /// 模型发现（GET /models；失败可手动回退，§36）。
-    fn discover(&self, draft: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError>;
+    /// 模型发现（GET /models；失败可手动回退，§36）。`api_key` 同上。
+    fn discover(
+        &self,
+        draft: &SettingsDraft,
+        api_key: Option<&str>,
+    ) -> Result<Vec<UiModelEntry>, BackendError>;
 
     /// 已知模型知识（返回 None = 目录里没有；界面显示"无数据"而不是空白）。
     fn model_info(&self, model_id: &str) -> Option<UiModelInfo> {
@@ -210,10 +223,18 @@ mod tests {
         // 宿主接入成本要低：默认实现让可选能力零成本
         struct Minimal;
         impl SettingsBackend for Minimal {
-            fn test_connection(&self, _: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+            fn test_connection(
+                &self,
+                _: &SettingsDraft,
+                _: Option<&str>,
+            ) -> Result<ConnectionReport, BackendError> {
                 Ok(ConnectionReport { latency_ms: 1 })
             }
-            fn discover(&self, _: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError> {
+            fn discover(
+                &self,
+                _: &SettingsDraft,
+                _: Option<&str>,
+            ) -> Result<Vec<UiModelEntry>, BackendError> {
                 Ok(vec![])
             }
         }

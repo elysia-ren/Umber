@@ -152,6 +152,12 @@ impl SettingsApp {
         self.job = Some(Job { rx });
     }
 
+    /// 本次会话用户输入的密钥（空白视为未输入 → 让后端沿用已保存的）。
+    fn session_key(&self) -> Option<String> {
+        let typed = self.state.api_key().trim();
+        (!typed.is_empty()).then(|| typed.to_string())
+    }
+
     /// 上次保存的状态（测试用）。
     pub fn save_state(&self) -> &SaveState {
         &self.save_state
@@ -160,6 +166,11 @@ impl SettingsApp {
     /// 触发一次"刷新模型列表"（走服务商 `/models`）。测试用入口。
     pub fn trigger_discovery(&mut self) {
         self.start_discovery();
+    }
+
+    /// 触发一次"测试连接"。测试用入口。
+    pub fn trigger_connection_test(&mut self) {
+        self.start_connection_test();
     }
 
     /// 处理已完成的后台动作。测试用入口（正常由 `ui()` 每帧调用）。
@@ -1026,11 +1037,14 @@ impl SettingsApp {
         self.connection = ConnectionTestState::Testing;
         let backend = self.backend.clone();
         let draft = self.state.to_draft();
+        let session_key = self.session_key();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::Builder::new()
             .name("umer-ui-connection".into())
             .spawn(move || {
-                let _ = tx.send(JobResult::Connection(backend.test_connection(&draft)));
+                let _ = tx.send(JobResult::Connection(
+                    backend.test_connection(&draft, session_key.as_deref()),
+                ));
             })
             .ok();
         self.job = Some(Job { rx });
@@ -1039,11 +1053,14 @@ impl SettingsApp {
     fn start_discovery(&mut self) {
         let backend = self.backend.clone();
         let draft = self.state.to_draft();
+        let session_key = self.session_key();
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::Builder::new()
             .name("umer-ui-discovery".into())
             .spawn(move || {
-                let _ = tx.send(JobResult::Discovery(backend.discover(&draft)));
+                let _ = tx.send(JobResult::Discovery(
+                    backend.discover(&draft, session_key.as_deref()),
+                ));
             })
             .ok();
         self.job = Some(Job { rx });

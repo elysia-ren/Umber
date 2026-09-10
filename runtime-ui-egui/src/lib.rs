@@ -54,7 +54,11 @@ mod backend {
     pub struct NullBackend;
 
     impl SettingsBackend for NullBackend {
-        fn test_connection(&self, _: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+        fn test_connection(
+            &self,
+            _: &SettingsDraft,
+            _: Option<&str>,
+        ) -> Result<ConnectionReport, BackendError> {
             Err(BackendError::new(
                 "connection.failed",
                 "no backend wired into this window",
@@ -63,6 +67,7 @@ mod backend {
         fn discover(
             &self,
             _: &SettingsDraft,
+            _: Option<&str>,
         ) -> Result<Vec<runtime_ui::UiModelEntry>, BackendError> {
             Err(BackendError::new("discovery.empty", "no backend wired"))
         }

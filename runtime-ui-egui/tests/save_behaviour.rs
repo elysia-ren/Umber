@@ -44,11 +44,19 @@ impl PersistingBackend {
 }
 
 impl SettingsBackend for PersistingBackend {
-    fn test_connection(&self, _: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+    fn test_connection(
+        &self,
+        _: &SettingsDraft,
+        _: Option<&str>,
+    ) -> Result<ConnectionReport, BackendError> {
         Ok(ConnectionReport { latency_ms: 1 })
     }
 
-    fn discover(&self, _: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError> {
+    fn discover(
+        &self,
+        _: &SettingsDraft,
+        _: Option<&str>,
+    ) -> Result<Vec<UiModelEntry>, BackendError> {
         Ok(vec![])
     }
 

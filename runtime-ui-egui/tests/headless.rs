@@ -27,12 +27,20 @@ mod support {
     }
 
     impl SettingsBackend for RecordingBackend {
-        fn test_connection(&self, _: &SettingsDraft) -> Result<ConnectionReport, BackendError> {
+        fn test_connection(
+            &self,
+            _: &SettingsDraft,
+            _: Option<&str>,
+        ) -> Result<ConnectionReport, BackendError> {
             self.test_calls
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Err(BackendError::new("connection.failed", "recording"))
         }
-        fn discover(&self, _: &SettingsDraft) -> Result<Vec<UiModelEntry>, BackendError> {
+        fn discover(
+            &self,
+            _: &SettingsDraft,
+            _: Option<&str>,
+        ) -> Result<Vec<UiModelEntry>, BackendError> {
             self.discover_calls
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Err(BackendError::new("discovery.empty", "recording"))
