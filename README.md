@@ -1,178 +1,267 @@
 # Universal Embedded Model Runtime
 
-可嵌入式统一 AI 模型运行时。随宿主软件分发、直接嵌入宿主进程，
-把协议差异 / 模型知识 / 流式行为 / 错误 / 凭据统一消化，
-宿主只面对一套稳定的 Canonical API。
+An embeddable runtime that unifies AI model access for host applications.
+Ship it inside your product and link it into your own process: it absorbs the
+protocol differences, model knowledge, streaming behaviour, error taxonomy and
+credential handling, so your code only ever talks to one stable Canonical API.
 
-- 架构总案：[`docs/architecture/V0-架构总案.md`](docs/architecture/V0-架构总案.md)（初版存于 [`docs/architecture/V0-架构总案-初版.md`](docs/architecture/V0-架构总案-初版.md)）
-- 开发计划：[`docs/architecture/开发计划.md`](docs/architecture/开发计划.md)
-- 契约自审：`docs/CONTRACT_REVIEW.md`
-- **宿主集成指南：`docs/HOST_INTEGRATION.md`**
+[中文说明 / Chinese](README.zh-CN.md)
 
-铁律：**本仓库只有 `runtime-ffi` 允许 `unsafe`；其余 crate 一律 `#![forbid(unsafe_code)]`。**
+## Why
 
-## Crate 结构（总案 §53）
+Talking to even a handful of providers means owning several wire protocols,
+several streaming dialects, several error vocabularies, several tool-call
+encodings, plus retries, timeouts, cancellation and secrets. This runtime does
+that once, and keeps doing it as the providers drift.
+
+| | |
+|---|---|
+| **One Canonical API** | Request / Event / Response / Error / Invocation / Usage types that leak no provider specifics. Host code never branches on the provider. |
+| **Four protocols, one shape** | `openai_chat`, `openai_responses`, `anthropic_messages`, `gemini` - real HTTP and SSE transports included. |
+| **Streaming you can trust** | Exactly one terminal event per invocation, strictly increasing `sequence`, append-only deltas, partial results that survive failure and cancellation. |
+| **Model intelligence** | An offline catalog of canonical model identities with capabilities, context limits, pricing and evidence. `unknown` stays `unknown` instead of being invented. |
+| **Credentials handled properly** | Secrets never reach config files, catalogs or logs. Host store -> OS keychain -> encrypted file, with a mandatory warning when the weakest tier is active. |
+| **Embeddable surface** | A stable pull-based C ABI (no async across the FFI boundary) and a dependency-free Python binding. Rust hosts link the crates directly. |
+
+## Guarantees
+
+These are contract-level promises, each covered by the conformance suites.
 
 ```text
-model-runtime/
-├── runtime-core/          Canonical API 契约（Request / Event / Response / Error / Invocation / Usage）
-├── runtime-model/         Model Intelligence（Identity / Deployment / Capability / Evidence / Resolver / Catalog / Registry / Probe）
-├── runtime-engine/        Invocation 引擎（终结保证 / 四段超时 / Retry / 部分结果 / 取消）
-├── runtime-provider/      Provider Adapter trait（§41.4）
-├── runtime-protocol/      四协议 Adapter + 真实 HTTP 传输 + SSE/错误映射基建
-├── runtime-conformance/   Conformance 套件（fake-provider / 断言库 / fixture 格式）
-├── runtime-credential/    CredentialStore 契约 + 内存实现 + 脱敏工具
-├── runtime-credential-os/ 平台凭据（系统钥匙串 / 加密文件 / 回退链）
-├── runtime-ui/            UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
-├── runtime-ffi/           Stable C ABI（拉取式，**已接真实协议**）+ C/Python 绑定；唯一允许 unsafe 的 crate
-├── runtime-data/          Model Data Pipeline & Database（上游适配器 / 规范化 / 冲突解析 / 本地库）
-└── runtime-ffi 之外的数据侧工具见 runtime-data 的 `model-data` CLI
+Terminal event    broken stream / malformed SSE / timeout / cancellation
+                  -> exactly one completed | failed | cancelled
+Partial results   content and usage produced before a failure or cancellation
+                  remain retrievable
+Global sequence   every event carries a strictly increasing sequence; parallel
+                  tool calls re-assemble by call_id / index
+Four timeouts     connect / first-token / idle / total, enforced by the engine
+Safe retry        a request that already produced output is never blindly replayed
+Error taxonomy    14 canonical error kinds; hosts never parse HTTP status codes
+Redaction         sensitive headers and JSON keys are redacted; secrets print as ***
 ```
 
-## 进度
-
-**M0–M11 全部完成**（`contract-v1` 已打标）。
-
-| 里程碑 | 状态 |
-|--------|------|
-| M0 契约冻结 | 完成：七契约代码级落地 + ABI spike PASS |
-| M1 Core + Conformance 基建 | 完成：终结保证 / 四段超时 / Retry / 部分结果 |
-| M2 openai_chat | 完成：9 用例 + **真实 DeepSeek 生成、工具调用、取消实测** |
-| M3 anthropic_messages | 完成：8 用例（thinking 签名透传、缓存断点） |
-| M4 openai_responses | 完成：6 用例（encrypted_content 回传） |
-| M5 gemini | 完成：8 用例（safety→ContentFiltered、responseSchema 子集映射） |
-| M6 Model Intelligence | 完成：Registry 三层 + 字段级仲裁 + Catalog 加载 |
-| M7 Probe | 完成：Passive 白名单强制 / Active 显式开启 / 四类失效触发 |
-| M8 Catalog Builder | 完成：规范化 / 身份合并 / 冲突检测 / 许可证门禁 / CLI |
-| M9 FFI 稳定化 | 完成：C ABI + **系统代理发现** + **OS 凭据三档回退** + cbindgen 生成头文件 + Python ctypes 绑定 + C 宿主示例；**ABI 0.2 起 C 宿主走真实协议链路**（部署 / 凭据 / Catalog 三个配置入口） |
-| M10 Runtime UI | **完成**：UISpec 数据契约 + egui/eframe 参考实现（侧栏厂商列表 + 内容区、30 个厂商预置分四类、模型数据呈现、证据行、无头测试、截图脚本） |
-| M11 集成与发布 | 完成：宿主集成指南 + 端到端验收 + `contract-v1` 标记 |
-
-## 质量状态
+## Workspace layout
 
 ```text
-295 个测试（285 passed + 10 ignored：真实网络冒烟 9 + 真实钥匙串写入 1）
-cargo clippy -D warnings 零警告   |   cargo fmt 干净
-真实网络验证：9 个用例（端点可达 3 + 真实流式 5 + HTTPS 往返 1），需凭据，CI 不跑
-设置窗口实测（release）：exe 7.4 MB，窗口正常启动渲染（RSS ~120 MB，见 UI 选型节）
+runtime-core/           Canonical API contracts (Request / Event / Response / Error / Invocation / Usage)
+runtime-model/          Model intelligence (identity / deployment / capability / evidence / resolver / catalog / registry / probe)
+runtime-engine/         Invocation engine (finality / four-stage timeouts / retry / partial results / cancellation)
+runtime-provider/       Provider adapter trait
+runtime-protocol/       Four protocol adapters, real HTTP transport, SSE and error mapping
+runtime-conformance/    Conformance suite (fake provider / assertions / fixture format)
+runtime-credential/     CredentialStore contract, in-memory store, redaction helpers
+runtime-credential-os/  Platform credentials (OS keychain / encrypted file / fallback chain)
+runtime-ui/             UISpec contract (settings schema / validation / discovery state machine / i18n)
+runtime-ui-egui/        Reference settings UI (replaceable; the visual layer is not a contract)
+runtime-ffi/            Stable C ABI (pull-based) + C and Python bindings
+runtime-data/           Model data pipeline and database (the `model-data` CLI)
 ```
 
-## UI 技术选型（egui/eframe，已实施）
+One rule is enforced mechanically: **only `runtime-ffi` may use `unsafe`;
+every other crate carries `#![forbid(unsafe_code)]`.**
 
-选型约束：体积小 / 内存小 / 性能好 / 现代观感 / **零商用风险**。
-排除 Electron（用户明确要求）；排除 Slint（免版税档的归属义务与
-"不得暴露 Slint API"条款同嵌入型组件冲突，embedded 设备不在覆盖内）。
+## Quick start
 
-`runtime-ui-egui` 是**参考实现，可替换**（视觉不是契约，§38）：
+### Rust
 
-- 只依赖 `runtime-ui` 数据契约，不碰网络 / 文件 / 凭据——动作全走 `SettingsBackend`
-- 表单由 schema 驱动渲染：契约加字段，UI 代码零改动跟随
-- 明暗双主题 token + Compact/Cozy 密度 + `pixels_per_point` 缩放（§38 四渲染参数）
-- 中文回退字体从系统加载（微软雅黑 / 苹方 / Noto CJK），不打包字体（省 10–20 MB）
-- 无头帧测试：不开窗口即可验证完整渲染路径
-- 实测（Windows / release）：exe 7.4 MB；RSS ~120 MB，主要来自 glow/GL 与 winit。
-  待调优项：裁剪 accesskit、按需重绘（`request_repaint` 节流）、必要时评估
-  iced+tiny-skia 纯软渲染路线；**是调优空间，不是选型缺陷**
-- 思考强度控件已进 schema（`default_reasoning_effort`，§21.1 四档位）；
-  就近降级与生效档位回写仍待实现（见"已知缺口"）
+```rust
+use std::sync::Arc;
 
+use runtime_core::{message::Message, request::GenerateRequest};
+use runtime_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
+use runtime_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
+use runtime_model::deployment::{Deployment, Endpoint, ProtocolKind};
+use runtime_protocol::{HttpConfig, HttpTransport, OpenAiChatAdapter, RealHttpTransport};
+use runtime_provider::ProviderAdapter;
 
-## 真实网络验证结果
+// 1) Credentials are referenced, never inlined into the request.
+let credentials = InMemoryCredentialStore::new();
+let key_ref = CredentialRef::from("deepseek/api_key");
+credentials.set(&key_ref, SecretString::new(std::env::var("DEEPSEEK_API_KEY")?))?;
 
-```text
-DeepSeek 流式生成     24 事件 / EndTurn / usage 11→19 / 真实回复文本        ✅
-DeepSeek 工具调用     tool_choice=Required → get_time {"city":"杭州"}        ✅
-DeepSeek 中途取消     4 事件后 Cancelled，取回部分内容 + 部分结果保证成立    ✅
-四家官方端点可达      DeepSeek / OpenAI(Chat+Responses) / Anthropic / Gemini ✅
-系统代理发现          Windows 系统代理（127.0.0.1:7897）自动生效（否则连不上）✅
-Windows 钥匙串        写入 → 读取 → 删除 真实往返                            ✅
-C 宿主（MSVC）        生成头文件下依然 PASS                                   ✅
-Python ctypes 绑定    7 事件 + 终结事件 + 所有权正确（无堆损坏）              ✅
+// 2) Endpoint (freely overridable) and 3) Deployment (provider-side model id).
+let endpoint = Endpoint {
+    id: "ep-1".into(),
+    provider_id: "deepseek".into(),
+    url: "https://api.deepseek.com/v1".into(),
+};
+let deployment = Deployment {
+    id: "deepseek/official/openai_chat/deepseek-chat".into(),
+    endpoint_id: endpoint.id.clone(),
+    protocol: ProtocolKind::OpenAiChat,
+    model_id: "deepseek-chat".into(),
+};
+
+// 4) The adapter converts protocol; the engine owns the invocation lifecycle.
+let transport: Arc<dyn HttpTransport> = Arc::new(RealHttpTransport::new(HttpConfig::default()));
+let adapter = OpenAiChatAdapter::new(transport);
+let request = GenerateRequest::new(deployment.id.clone(), vec![Message::user("Hello")]);
+
+let factory = {
+    let (endpoint, deployment, request, credentials, key_ref) = (
+        endpoint.clone(),
+        deployment.clone(),
+        request.clone(),
+        credentials,
+        key_ref.clone(),
+    );
+    move || adapter.execute(&request, &endpoint, &deployment, &credentials, &key_ref)
+};
+
+let mut events = Vec::new();
+let outcome = run_invocation(
+    &factory,
+    &request,
+    &CancelToken::new(),
+    &TimeoutPolicy::default(),
+    &RetryPolicy::default(),
+    &mut |event| events.push(event),
+);
+
+// outcome.response: Option<GenerateResponse>  (stop_reason / content / usage)
+// outcome.partial : content and usage that survived a failure or a cancellation
 ```
 
-复现：
+### C / C++
+
+The C ABI is pull-based: you ask for the next event and it blocks for at most
+`timeout_ms`. Set up the runtime once, then open one stream per invocation.
+
+```c
+#include <string.h>
+#include "umer.h"
+
+if (runtime_abi_version() >> 16 != 0) { /* major mismatch: refuse to start */ }
+
+UmerRuntime* rt = runtime_init();
+
+/* Register the deployment: the request model must match this id exactly. */
+const char* config =
+    "{\"id\":\"deepseek/official/openai_chat/deepseek-chat\","
+    "\"provider_id\":\"deepseek\","
+    "\"protocol\":\"openai_chat\","
+    "\"endpoint_url\":\"https://api.deepseek.com/v1\","
+    "\"model_id\":\"deepseek-chat\","
+    "\"credential_ref\":\"deepseek/api_key\"}";
+runtime_set_deployment(rt, config, strlen(config));
+
+/* Credentials live in memory only; persist them yourself (OS keychain). */
+runtime_set_credential(rt, "deepseek/api_key", getenv("DEEPSEEK_API_KEY"));
+
+/* Optional: offline model knowledge. */
+runtime_load_catalog(rt, "catalog.json");
+
+const char* req =
+    "{\"model\":\"deepseek/official/openai_chat/deepseek-chat\",\"messages\":["
+    "{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello\"}]}]}";
+
+UmerStream* stream = NULL;
+runtime_stream_open(rt, req, strlen(req), &stream);
+
+UmerEvent ev;
+for (;;) {
+    int32_t status = runtime_stream_next(stream, 2000, &ev);
+    if (status == UMER_EVENT) {
+        /* ev.json belongs to the caller: free it exactly once. */
+        puts(ev.json);
+        runtime_string_free((char*)ev.json);
+    } else if (status == UMER_WOULD_BLOCK) {
+        continue;               /* timed out, stream still open */
+    } else if (status == UMER_CLOSED) {
+        break;                  /* terminal event already delivered */
+    } else {
+        break;                  /* negative code: see umer.h */
+    }
+}
+runtime_stream_close(stream);
+runtime_shutdown(rt);
+```
+
+Build the bundled example (Windows / MSVC):
+
+```bat
+cl /I include examples\spike.c /Fe:spike.exe /link lib\runtime_ffi.dll.lib
+```
+
+`runtime_stream_open` returns `UMER_ERR_NOT_CONFIGURED` when the requested
+model has no registered deployment and the built-in demo source has not been
+enabled: the runtime never silently returns fabricated data.
+
+### Python
+
+`runtime-ffi/bindings/python/umer.py` uses only the standard library.
+
+```python
+from umer import Runtime
+
+with Runtime() as rt:                       # checks the ABI major version
+    rt.set_deployment({
+        "id": "deepseek/official/openai_chat/deepseek-chat",
+        "provider_id": "deepseek",
+        "protocol": "openai_chat",
+        "endpoint_url": "https://api.deepseek.com/v1",
+        "model_id": "deepseek-chat",
+        "credential_ref": "deepseek/api_key",
+    })
+    rt.set_credential("deepseek/api_key", "sk-...")
+    rt.load_catalog("catalog.json")         # optional, offline
+
+    request = {
+        "model": "deepseek/official/openai_chat/deepseek-chat",
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}],
+    }
+    with rt.stream(request) as stream:
+        for event in stream:                # stops at the terminal event
+            inner = event["data"]["event"]
+            if inner["type"] == "text_delta":
+                print(inner["delta"], end="", flush=True)
+```
+
+## Reference settings UI
+
+![settings window](runtime-ui-egui/examples/wizard-dark.png)
+
+`runtime-ui-egui` is a working settings window built only on the `runtime-ui`
+data contract: schema-driven forms, light and dark tokens, CJK font fallback
+loaded from the system, and headless frame tests. It reaches the network, the
+disk and the keychain exclusively through the host-supplied `SettingsBackend`,
+so replacing it never touches the contract.
+
+## Build and test
 
 ```text
-cargo test -p runtime-protocol --test network_smoke -- --ignored --nocapture
-cargo test -p runtime-credential-os os_keystore_round_trip -- --ignored
+cargo test                                  # full suite
+cargo clippy --all-targets -- -D warnings   # zero-warning gate
+cargo fmt                                   # formatting
+
+# C ABI example (Windows / MSVC)
 runtime-ffi\examples\build_spike.cmd debug
-python runtime-ffi\bindings\python\umer.py
-```
 
-## 已验证的关键保证（每条都有对应测试）
-
-```text
-终结事件保证        断流 / EOF / 畸形 / 取消 → 恰好一个终结事件（§23.1）
-部分结果保证        失败或取消后 partial() 仍可取回内容与 usage（§25.1）— 真实网络下已验证
-请求体格式          四协议各自形状 + 默认档位不冗余发送
-签名透传            Anthropic thinking signature / Responses encrypted_content 原样往返（§19.1）
-缓存断点            块级 cache_control → Anthropic system cache_control（§20）
-错误映射            429/529/配额/上下文超长/安全拦截 → 14 类 ModelError（§28）
-并发工具调用        按 index / call_id 归属重组（§24）— 真实网络下已验证
-Discovery 回退      无 /models 不阻断，可手动添加 Model ID（§36）
-字段级仲裁          行为/规格/价格/身份四表 + 用户覆盖最优先 + 5% 数字冲突阈值（§13）
-Probe 门禁          Passive 只允许非生成性方法；Active 需显式开启（§17）
-许可证门禁          白名单外的数据源直接拒绝构建（§62）
-脱敏                敏感 header / JSON key 强制脱敏，SecretString 打码（§28 §32）
-凭据回退链          宿主 → 系统钥匙串 → 加密文件；落到加密文件时强制告警（§32.1）
-加密文件存储        ChaCha20-Poly1305，明文不落盘，错密钥必须报错（测试强制）
-ABI                 C 宿主 + Python 绑定实测：握手 / 拉取 / WOULD_BLOCK / 所有权 / NULL 安全（§50）
-端到端旅程          UISpec 配置 → 凭据 → 发现回退 → Endpoint 覆盖 → Registry → Adapter → Engine
-```
-
-## 真实世界踩到的三个问题（fixtures 抓不到，已修复）
-
-1. **纯文本错误体**：DeepSeek 无凭据返回 `Authentication Fails (governor)`（非 JSON）。
-   传输层原先要求 JSON 并报 Unknown 错误 → 改为返回 `HttpResponse::Text`，
-   由协议层统一映射为 `AuthenticationFailed`。
-2. **系统代理**：用户在 Windows"Internet 选项"里开代理不会设环境变量，
-   而 ureq 只读环境变量 → 传输层新增系统代理发现（Windows 注册表 / macOS `scutil`）。
-   不修这条，宿主在用户机器上会莫名连不上。
-3. **ctypes 所有权陷阱**：`c_char_p` 字段访问会解引用成 Python bytes，
-   交给 `runtime_string_free` 等于 free 掉 Python 自己的缓冲区（实测堆损坏 `0xC0000374`）
-   → 绑定层改用 `c_void_p` 保持原始指针。
-
-## 本地开发
-
-```text
-cargo test                                  # 全量测试
-cargo clippy --all-targets -- -D warnings   # 零警告门禁
-cargo fmt                                   # 格式化
-
-# C ABI 示例（Windows / MSVC）
-runtime-ffi\examples\build_spike.cmd debug
-
-# 重新生成 C 头文件（Rust 类型是唯一真值）
+# regenerate the C header from the Rust types (the single source of truth)
 cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
 ```
 
-要求：Rust stable（edition 2021，MSRV 1.75）。CI 见 `.github/workflows/ci.yml`
-（fmt / clippy -D warnings / test，三平台矩阵）。
+Rust stable, edition 2021, MSRV 1.75. CI runs `cargo fmt --check`,
+`cargo clippy --all-targets -- -D warnings` and `cargo test` on Windows, macOS
+and Linux. Tests that use the real network or write to the real OS keychain are
+`#[ignore]`d and opt-in, so CI never spends tokens or mutates a developer machine.
 
-## 许可
-
-本项目采用 **MIT OR Apache-2.0** 双许可（Rust 生态惯例，可任选其一）：
-随宿主软件分发、闭源商用、嵌入专有产品均被允许，无归属义务之外的限制。
-
-- `LICENSE-MIT` / `LICENSE-APACHE`
-- 随包模型数据只收录**可再分发**来源（MIT），OpenRouter 与厂商官方文档
-  标为 reference-only 不进随包产物，见 `docs/MODEL_DATA.md`
-- 第三方依赖按其自身许可（如 `keyring` / `chacha20poly1305` / `egui` /
-  `ureq`）；发布二进制前请自行核对依赖树
-
-## 版本标记
+## Documentation
 
 ```text
-contract-v1    七大契约冻结（Canonical API / ModelInfo / CapabilityRecord /
-               Provider Adapter / UISpec / FFI-ABI / Versioning）
+docs/HOST_INTEGRATION.md   host integration guide (Rust, credentials, proxy, C ABI, Python)
+docs/MODEL_DATA.md         model data pipeline, evidence chain, license gate
+docs/CONTRACT_REVIEW.md    contract-by-contract self review
+docs/architecture/         V0 architecture and development plan
 ```
 
-## 未做的与原因（非设计缺口）
+The design documents are written in Chinese.
 
-```text
-真实冒烟需要凭据   四协议的"真实生成"冒烟已就位（network_smoke.rs），
-                  通过环境变量 UMER_SMOKE_*_KEY 启用；CI 永不消耗真实 Token
-覆盖率测量         需 llvm-cov/tarpaulin 工具链，未在计划门槛内强制
-参考 UI 视觉实现   UISpec 数据契约已冻结；视觉层随宿主环境落地（契约特意不依赖 GUI 库）
-```
+## License
 
+Dual-licensed under **MIT OR Apache-2.0**, at your option - see `LICENSE-MIT`
+and `LICENSE-APACHE`. Distribution inside proprietary host software is permitted.
+
+Bundled model data is generated only from redistributable sources (currently
+MIT-licensed upstreams). Sources whose terms do not allow redistribution stay
+build-time references and never enter the shipped catalog.
