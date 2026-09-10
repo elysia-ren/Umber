@@ -7,12 +7,12 @@
 
 ```rust
 use std::sync::Arc;
-use runtime_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
-use runtime_core::{message::Message, request::GenerateRequest};
-use runtime_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
-use runtime_model::deployment::{Deployment, Endpoint, ProtocolKind};
-use runtime_protocol::OpenAiChatAdapter;
-use runtime_provider::ProviderAdapter;
+use umber_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
+use umber_core::{message::Message, request::GenerateRequest};
+use umber_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
+use umber_model::deployment::{Deployment, Endpoint, ProtocolKind};
+use umber_protocol::OpenAiChatAdapter;
+use umber_provider::ProviderAdapter;
 
 // 1) 凭据：引用式，秘密不落配置 JSON（总案 §32）
 let credentials = InMemoryCredentialStore::new();
@@ -78,10 +78,10 @@ let outcome = run_invocation(
 
 ## 4. 凭据
 
-三层回退（`runtime-credential-os`，总案 §32.1）：
+三层回退（`umber-credential-os`，总案 §32.1）：
 
 ```rust
-use runtime_credential_os::{CredentialTier, EncryptedFileStore, FallbackChain, OsKeystore};
+use umber_credential_os::{CredentialTier, EncryptedFileStore, FallbackChain, OsKeystore};
 use std::sync::Arc;
 
 let chain = FallbackChain::new(vec![
@@ -181,7 +181,7 @@ runtime_shutdown(rt);
 
 ABI 硬规则（总案 §50.2）：句柄谁分配谁释放；panic 不穿越边界（全部入口
 catch_unwind）；字符串一律 UTF-8 + 显式长度；`runtime_stream_cancel` 可与
-`runtime_stream_next` 并发调用。可运行示例见 `runtime-ffi/examples/host_example.c`。
+`runtime_stream_next` 并发调用。可运行示例见 `umber-ffi/examples/host_example.c`。
 
 ABI 0.2 起，C 宿主拿到的是**和 Rust 宿主同一条真实链路**（四个协议 Adapter +
 真实 HTTP/SSE + Engine 生命周期）：
@@ -197,15 +197,15 @@ runtime_set_demo(rt, 1)                 显式开启内置假流，仅验证 ABI
 **头文件由 Rust 类型生成**（不要手改）：
 
 ```text
-cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
+cbindgen --config umber-ffi/cbindgen.toml --crate umber-ffi -o umber-ffi/include/umber.h
 ```
 
-### Python（`runtime-ffi/bindings/python/umer.py`）
+### Python（`umber-ffi/bindings/python/umber.py`）
 
 纯标准库 `ctypes`，无第三方依赖：
 
 ```python
-from umer import Runtime, UmerRuntimeFailure
+from umber import Runtime, UmerRuntimeFailure
 
 with Runtime() as rt:
     with rt.stream({"model": "dep-1", "messages": [...]}) as stream:
@@ -221,7 +221,7 @@ with Runtime() as rt:
 
 ## 8. 数据供应链（不随宿主分发）
 
-模型元数据由 `runtime-data` 的 `model-data` CLI 于构建期生成：
+模型元数据由 `umber-data` 的 `model-data` CLI 于构建期生成：
 
 ```text
 model-data build source1.json source2.json -o catalog.json

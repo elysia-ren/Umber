@@ -1,7 +1,7 @@
 # 模型数据体系
 
-模型数据的**整条管线**都在仓库内：`runtime-data` 负责管线与数据库，
-`runtime-model` 负责知识契约。设计来源见
+模型数据的**整条管线**都在仓库内：`umber-data` 负责管线与数据库，
+`umber-model` 负责知识契约。设计来源见
 [`architecture/V0-架构总案.md`](architecture/V0-架构总案.md) 的 §11 数据来源模型、
 §12 Catalog Builder、§13 字段级优先级、§47 本地 Catalog、§63 外部数据使用方式。
 
@@ -10,13 +10,13 @@
 ```text
 外部成熟数据库（不重复造世界级模型数据库）
     Models.dev · LiteLLM · OpenRouter · 官方覆盖层
-        ↓ runtime-data/src/sources/   每个上游一个 Source Adapter
+        ↓ umber-data/src/sources/   每个上游一个 Source Adapter
     RawModelRecord（统一中间结构）
-        ↓ runtime-data/src/pipeline.rs
+        ↓ umber-data/src/pipeline.rs
     Normalize → Identity Match → Conflict Resolve → License Gate
         ↓
     Canonical Catalog（构建期产物，随 Runtime 分发）
-        ↓ runtime-data/src/store.rs
+        ↓ umber-data/src/store.rs
     Runtime Local DB（用户机器上那一层）
         ↑ Deployment · Probe 结果 · User Override
         ↓ Evidence Resolution
@@ -27,9 +27,9 @@
 
 | 规格 | 本仓库落点 |
 |------|-----------|
-| A. External Source Database | `runtime-data/src/sources/{models_dev,litellm,openrouter,official}.rs` |
-| B. Build-time Canonical DB | `runtime-data::pipeline::build`，由 `model-data build` 驱动 |
-| C. Runtime Local DB | `runtime-data::store::LocalDb`（逐记录版本 + 覆盖 + 探测结果） |
+| A. External Source Database | `umber-data/src/sources/{models_dev,litellm,openrouter,official}.rs` |
+| B. Build-time Canonical DB | `umber-data::pipeline::build`，由 `model-data build` 驱动 |
+| C. Runtime Local DB | `umber-data::store::LocalDb`（逐记录版本 + 覆盖 + 探测结果） |
 
 ## 二、一次真实构建的结果
 
@@ -73,8 +73,8 @@ OpenRouter     436 条（reference-only，不进随包数据）
 运行：
 
 ```bash
-model-data build runtime-data/snapshots/{models_dev,litellm}.json -o runtime-data/out/catalog.json
-model-data inspect runtime-data/out/catalog.json
+model-data build umber-data/snapshots/{models_dev,litellm}.json -o umber-data/out/catalog.json
+model-data inspect umber-data/out/catalog.json
 model-data licenses
 ```
 
@@ -86,9 +86,9 @@ model-data licenses
 2. **大小写重复键**：LiteLLM 文件里真的存在 `baai/...` 与 `BAAI/...`
    两个键。大小写不敏感的解析器会直接崩，Rust 的 map 是敏感的，两者都保留。
 3. **档位词不统一**：OpenRouter 用 `max/high/low`，规范是
-   `minimal/low/medium/high`。归一 + **就近降级**在 `runtime-model::effort`。
+   `minimal/low/medium/high`。归一 + **就近降级**在 `umber-model::effort`。
 4. **不是所有错误体都是 JSON**：DeepSeek 无凭据返回纯文本
-   `Authentication Fails (governor)`（这属于传输层，见 `runtime-protocol`）。
+   `Authentication Fails (governor)`（这属于传输层，见 `umber-protocol`）。
 
 ## 四、两条必须记住的事实
 
@@ -104,7 +104,7 @@ model-data licenses
 
 ## 五、许可与来源
 
-`runtime-data/src/licenses.rs` 是白名单门禁：
+`umber-data/src/licenses.rs` 是白名单门禁：
 
 - **可随包分发**：MIT / Apache-2.0 / CC0-1.0 / CC-BY-4.0 / CC-BY-SA-4.0 / BSD-3-Clause
 - **仅构建参考**：Proprietary、CC-BY-NC-4.0、未审来源

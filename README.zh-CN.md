@@ -37,21 +37,21 @@
 ## 仓库结构
 
 ```text
-runtime-core/           Canonical API 契约（Request / Event / Response / Error / Invocation / Usage）
-runtime-model/          模型智能（身份 / 部署 / 能力 / 证据 / 解析 / 目录 / 注册表 / 探针）
-runtime-engine/         调用引擎（终结保证 / 四段超时 / 重试 / 部分结果 / 取消）
-runtime-provider/       Provider Adapter trait
-runtime-protocol/       四协议 Adapter、真实 HTTP 传输、SSE 与错误映射
-runtime-conformance/    Conformance 套件（fake provider / 断言库 / fixture 格式）
-runtime-credential/     CredentialStore 契约、内存实现、脱敏工具
-runtime-credential-os/  平台凭据（系统钥匙串 / 加密文件 / 回退链）
-runtime-ui/             UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
-runtime-ui-egui/        参考设置界面（可替换；视觉层不是契约）
-runtime-ffi/            Stable C ABI（拉取式）+ C / Python 绑定
-runtime-data/           模型数据管线与本地库（`model-data` CLI）
+umber-core/           Canonical API 契约（Request / Event / Response / Error / Invocation / Usage）
+umber-model/          模型智能（身份 / 部署 / 能力 / 证据 / 解析 / 目录 / 注册表 / 探针）
+umber-engine/         调用引擎（终结保证 / 四段超时 / 重试 / 部分结果 / 取消）
+umber-provider/       Provider Adapter trait
+umber-protocol/       四协议 Adapter、真实 HTTP 传输、SSE 与错误映射
+umber-conformance/    Conformance 套件（fake provider / 断言库 / fixture 格式）
+umber-credential/     CredentialStore 契约、内存实现、脱敏工具
+umber-credential-os/  平台凭据（系统钥匙串 / 加密文件 / 回退链）
+umber-ui/             UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
+umber-ui-egui/        参考设置界面（可替换；视觉层不是契约）
+umber-ffi/            Stable C ABI（拉取式）+ C / Python 绑定
+umber-data/           模型数据管线与本地库（`model-data` CLI）
 ```
 
-一条铁律由编译器强制：**只有 `runtime-ffi` 允许 `unsafe`，其余 crate 一律
+一条铁律由编译器强制：**只有 `umber-ffi` 允许 `unsafe`，其余 crate 一律
 带 `#![forbid(unsafe_code)]`。**
 
 ## 快速开始
@@ -61,12 +61,12 @@ runtime-data/           模型数据管线与本地库（`model-data` CLI）
 ```rust
 use std::sync::Arc;
 
-use runtime_core::{message::Message, request::GenerateRequest};
-use runtime_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
-use runtime_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
-use runtime_model::deployment::{Deployment, Endpoint, ProtocolKind};
-use runtime_protocol::{HttpConfig, HttpTransport, OpenAiChatAdapter, RealHttpTransport};
-use runtime_provider::ProviderAdapter;
+use umber_core::{message::Message, request::GenerateRequest};
+use umber_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
+use umber_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
+use umber_model::deployment::{Deployment, Endpoint, ProtocolKind};
+use umber_protocol::{HttpConfig, HttpTransport, OpenAiChatAdapter, RealHttpTransport};
+use umber_provider::ProviderAdapter;
 
 // 1) 凭据按引用传递，绝不内联进请求
 let credentials = InMemoryCredentialStore::new();
@@ -122,7 +122,7 @@ C ABI 是拉取式的：你主动要下一个事件，最多阻塞 `timeout_ms`�
 
 ```c
 #include <string.h>
-#include "umer.h"
+#include "umber.h"
 
 if (runtime_abi_version() >> 16 != 0) { /* 主版本不匹配：拒绝启动 */ }
 
@@ -163,7 +163,7 @@ for (;;) {
     } else if (status == UMER_CLOSED) {
         break;                  /* 终结事件已交付 */
     } else {
-        break;                  /* 负数是错误码，见 umer.h */
+        break;                  /* 负数是错误码，见 umber.h */
     }
 }
 runtime_stream_close(stream);
@@ -173,7 +173,7 @@ runtime_shutdown(rt);
 编译自带示例（Windows / MSVC）：
 
 ```bat
-cl /I include examples\host_example.c /Fe:host_example.exe /link lib\runtime_ffi.dll.lib
+cl /I include examples\host_example.c /Fe:host_example.exe /link lib\umber_ffi.dll.lib
 ```
 
 当请求的 model 没有对应部署、且没有显式开启内置 demo 源时，
@@ -181,10 +181,10 @@ cl /I include examples\host_example.c /Fe:host_example.exe /link lib\runtime_ffi
 
 ### Python
 
-`runtime-ffi/bindings/python/umer.py` 只用标准库。
+`umber-ffi/bindings/python/umber.py` 只用标准库。
 
 ```python
-from umer import Runtime
+from umber import Runtime
 
 with Runtime() as rt:                       # 自动校验 ABI 主版本
     rt.set_deployment({
@@ -211,9 +211,9 @@ with Runtime() as rt:                       # 自动校验 ABI 主版本
 
 ## 参考设置界面
 
-![设置窗口](runtime-ui-egui/examples/wizard-dark.png)
+![设置窗口](umber-ui-egui/examples/wizard-dark.png)
 
-`runtime-ui-egui` 是只依赖 `runtime-ui` 数据契约实现的可用设置窗口：schema 驱动表单、
+`umber-ui-egui` 是只依赖 `umber-ui` 数据契约实现的可用设置窗口：schema 驱动表单、
 明暗双主题 token、从系统加载 CJK 回退字体、无头帧测试。它访问网络、磁盘与钥匙串
 全部经由宿主实现的 `SettingsBackend`，因此替换它不会触及契约。
 
@@ -225,13 +225,13 @@ cargo clippy --all-targets -- -D warnings   # 零警告门禁
 cargo fmt                                   # 格式化
 
 # C ABI 示例（Windows / MSVC）
-runtime-ffi\examples\build_example.cmd debug
+umber-ffi\examples\build_example.cmd debug
 
 # 由 Rust 类型重新生成 C 头文件（Rust 类型是唯一真值）
-cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
+cbindgen --config umber-ffi/cbindgen.toml --crate umber-ffi -o umber-ffi/include/umber.h
 ```
 
-Linux 上 `runtime-credential-os` 经 `libdbus` 访问 Secret Service，构建需要
+Linux 上 `umber-credential-os` 经 `libdbus` 访问 Secret Service，构建需要
 `libdbus-1-dev` 与 `pkg-config`：
 
 ```bash

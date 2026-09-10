@@ -1,0 +1,17 @@
+[package]
+name = "umber-credential-os"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Platform credential backends: OS keystore + encrypted file fallback + fallback chain (总案 §32)"
+
+[dependencies]
+umber-credential = { path = "../umber-credential" }
+chacha20poly1305 = "0.10"
+rand = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(any(windows, target_os = "macos", target_os = "linux"))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }

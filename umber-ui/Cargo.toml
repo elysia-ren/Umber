@@ -1,0 +1,21 @@
+[package]
+name = "umber-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "UISpec contract: declarative settings schema, validation, discovery state machine, i18n strings (总案 §38 §41.5)"
+
+[dependencies]
+umber-core = { workspace = true }
+umber-credential = { path = "../umber-credential" }
+umber-model = { path = "../umber-model" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+umber-conformance = { path = "../umber-conformance" }
+umber-engine = { workspace = true }
+umber-protocol = { path = "../umber-protocol" }
+umber-provider = { path = "../umber-provider" }
+umber-core = { workspace = true }

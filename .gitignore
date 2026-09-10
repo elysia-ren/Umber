@@ -1,11 +1,11 @@
 # 构建产物
 /target/
-runtime-ffi/examples/bin/
-runtime-ffi/examples/*.obj
+umber-ffi/examples/bin/
+umber-ffi/examples/*.obj
 
-# 模型数据全量快照与产出（7MB+，可由 scripts 重建；见 runtime-data/tests/fixtures/README.md）
-runtime-data/snapshots/
-runtime-data/out/
+# 模型数据全量快照与产出（7MB+，可由 scripts 重建；见 umber-data/tests/fixtures/README.md）
+umber-data/snapshots/
+umber-data/out/
 
 # 本地数据
 *.local

@@ -44,21 +44,21 @@ Redaction         sensitive headers and JSON keys are redacted; secrets print as
 ## Workspace layout
 
 ```text
-runtime-core/           Canonical API contracts (Request / Event / Response / Error / Invocation / Usage)
-runtime-model/          Model intelligence (identity / deployment / capability / evidence / resolver / catalog / registry / probe)
-runtime-engine/         Invocation engine (finality / four-stage timeouts / retry / partial results / cancellation)
-runtime-provider/       Provider adapter trait
-runtime-protocol/       Four protocol adapters, real HTTP transport, SSE and error mapping
-runtime-conformance/    Conformance suite (fake provider / assertions / fixture format)
-runtime-credential/     CredentialStore contract, in-memory store, redaction helpers
-runtime-credential-os/  Platform credentials (OS keychain / encrypted file / fallback chain)
-runtime-ui/             UISpec contract (settings schema / validation / discovery state machine / i18n)
-runtime-ui-egui/        Reference settings UI (replaceable; the visual layer is not a contract)
-runtime-ffi/            Stable C ABI (pull-based) + C and Python bindings
-runtime-data/           Model data pipeline and database (the `model-data` CLI)
+umber-core/           Canonical API contracts (Request / Event / Response / Error / Invocation / Usage)
+umber-model/          Model intelligence (identity / deployment / capability / evidence / resolver / catalog / registry / probe)
+umber-engine/         Invocation engine (finality / four-stage timeouts / retry / partial results / cancellation)
+umber-provider/       Provider adapter trait
+umber-protocol/       Four protocol adapters, real HTTP transport, SSE and error mapping
+umber-conformance/    Conformance suite (fake provider / assertions / fixture format)
+umber-credential/     CredentialStore contract, in-memory store, redaction helpers
+umber-credential-os/  Platform credentials (OS keychain / encrypted file / fallback chain)
+umber-ui/             UISpec contract (settings schema / validation / discovery state machine / i18n)
+umber-ui-egui/        Reference settings UI (replaceable; the visual layer is not a contract)
+umber-ffi/            Stable C ABI (pull-based) + C and Python bindings
+umber-data/           Model data pipeline and database (the `model-data` CLI)
 ```
 
-One rule is enforced mechanically: **only `runtime-ffi` may use `unsafe`;
+One rule is enforced mechanically: **only `umber-ffi` may use `unsafe`;
 every other crate carries `#![forbid(unsafe_code)]`.**
 
 ## Quick start
@@ -68,12 +68,12 @@ every other crate carries `#![forbid(unsafe_code)]`.**
 ```rust
 use std::sync::Arc;
 
-use runtime_core::{message::Message, request::GenerateRequest};
-use runtime_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
-use runtime_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
-use runtime_model::deployment::{Deployment, Endpoint, ProtocolKind};
-use runtime_protocol::{HttpConfig, HttpTransport, OpenAiChatAdapter, RealHttpTransport};
-use runtime_provider::ProviderAdapter;
+use umber_core::{message::Message, request::GenerateRequest};
+use umber_credential::{CredentialRef, InMemoryCredentialStore, SecretString};
+use umber_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
+use umber_model::deployment::{Deployment, Endpoint, ProtocolKind};
+use umber_protocol::{HttpConfig, HttpTransport, OpenAiChatAdapter, RealHttpTransport};
+use umber_provider::ProviderAdapter;
 
 // 1) Credentials are referenced, never inlined into the request.
 let credentials = InMemoryCredentialStore::new();
@@ -130,7 +130,7 @@ The C ABI is pull-based: you ask for the next event and it blocks for at most
 
 ```c
 #include <string.h>
-#include "umer.h"
+#include "umber.h"
 
 if (runtime_abi_version() >> 16 != 0) { /* major mismatch: refuse to start */ }
 
@@ -171,7 +171,7 @@ for (;;) {
     } else if (status == UMER_CLOSED) {
         break;                  /* terminal event already delivered */
     } else {
-        break;                  /* negative code: see umer.h */
+        break;                  /* negative code: see umber.h */
     }
 }
 runtime_stream_close(stream);
@@ -181,7 +181,7 @@ runtime_shutdown(rt);
 Build the bundled example (Windows / MSVC):
 
 ```bat
-cl /I include examples\host_example.c /Fe:host_example.exe /link lib\runtime_ffi.dll.lib
+cl /I include examples\host_example.c /Fe:host_example.exe /link lib\umber_ffi.dll.lib
 ```
 
 `runtime_stream_open` returns `UMER_ERR_NOT_CONFIGURED` when the requested
@@ -190,10 +190,10 @@ enabled: the runtime never silently returns fabricated data.
 
 ### Python
 
-`runtime-ffi/bindings/python/umer.py` uses only the standard library.
+`umber-ffi/bindings/python/umber.py` uses only the standard library.
 
 ```python
-from umer import Runtime
+from umber import Runtime
 
 with Runtime() as rt:                       # checks the ABI major version
     rt.set_deployment({
@@ -220,9 +220,9 @@ with Runtime() as rt:                       # checks the ABI major version
 
 ## Reference settings UI
 
-![settings window](runtime-ui-egui/examples/wizard-dark.png)
+![settings window](umber-ui-egui/examples/wizard-dark.png)
 
-`runtime-ui-egui` is a working settings window built only on the `runtime-ui`
+`umber-ui-egui` is a working settings window built only on the `umber-ui`
 data contract: schema-driven forms, light and dark tokens, CJK font fallback
 loaded from the system, and headless frame tests. It reaches the network, the
 disk and the keychain exclusively through the host-supplied `SettingsBackend`,
@@ -236,13 +236,13 @@ cargo clippy --all-targets -- -D warnings   # zero-warning gate
 cargo fmt                                   # formatting
 
 # C ABI example (Windows / MSVC)
-runtime-ffi\examples\build_example.cmd debug
+umber-ffi\examples\build_example.cmd debug
 
 # regenerate the C header from the Rust types (the single source of truth)
-cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
+cbindgen --config umber-ffi/cbindgen.toml --crate umber-ffi -o umber-ffi/include/umber.h
 ```
 
-On Linux, `runtime-credential-os` reaches the Secret Service API through
+On Linux, `umber-credential-os` reaches the Secret Service API through
 `libdbus`, so the build needs `libdbus-1-dev` and `pkg-config`:
 
 ```bash

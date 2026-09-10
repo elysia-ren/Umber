@@ -1,0 +1,13 @@
+[package]
+name = "umber-provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Provider Adapter contract (plan 39.4/51-55)"
+
+[dependencies]
+umber-credential = { path = "../umber-credential" }
+umber-core = { workspace = true }
+umber-engine = { path = "../umber-engine" }
+umber-model = { path = "../umber-model" }

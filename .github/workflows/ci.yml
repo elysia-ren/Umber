@@ -18,7 +18,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      # runtime-credential-os 在 Linux 上经 libdbus 访问 Secret Service（keyring
+      # umber-credential-os 在 Linux 上经 libdbus 访问 Secret Service（keyring
       # 的 sync-secret-service -> dbus-secret-service -> libdbus-sys），
       # 缺 libdbus-1-dev 时构建脚本会失败。
       - name: Install Linux build dependencies

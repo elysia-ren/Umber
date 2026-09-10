@@ -1,0 +1,23 @@
+[package]
+name = "umber-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Protocol adapters: openai_chat / anthropic_messages / openai_responses / gemini (总案 §4–§5 M2–M5)"
+
+[dependencies]
+umber-core = { workspace = true }
+umber-credential = { path = "../umber-credential" }
+umber-engine = { workspace = true }
+umber-model = { path = "../umber-model" }
+umber-provider = { path = "../umber-provider" }
+ureq = { version = "2", features = ["json", "tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+umber-conformance = { path = "../umber-conformance" }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"

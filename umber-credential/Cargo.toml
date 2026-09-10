@@ -1,0 +1,10 @@
+[package]
+name = "umber-credential"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "CredentialStore abstraction, in-memory test store, redaction helpers (总案 §32)"
+
+[dependencies]
+serde_json = { workspace = true }
