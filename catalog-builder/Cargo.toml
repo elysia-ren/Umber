@@ -1,0 +1,11 @@
+[package]
+name = "catalog-builder"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Offline data supply chain: external sources -> canonical model catalog (总案 §12 §62–§63)"
+
+[dependencies]
+runtime-model = { path = "../runtime-model" }
+serde = { workspace = true }
+serde_json = { workspace = true }

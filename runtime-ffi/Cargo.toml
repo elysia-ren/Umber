@@ -1,0 +1,14 @@
+[package]
+name = "runtime-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Stable C ABI (pull-based) — the only crate allowed to use unsafe (总案 §41.6 §50)"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+runtime-core = { workspace = true }
+runtime-engine = { workspace = true }
+serde_json = { workspace = true }

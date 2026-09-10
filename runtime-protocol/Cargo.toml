@@ -1,0 +1,22 @@
+[package]
+name = "runtime-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Protocol adapters: openai_chat / anthropic_messages / openai_responses / gemini (总案 §4–§5 M2–M5)"
+
+[dependencies]
+runtime-core = { workspace = true }
+runtime-credential = { path = "../runtime-credential" }
+runtime-engine = { workspace = true }
+runtime-model = { path = "../runtime-model" }
+runtime-provider = { path = "../runtime-provider" }
+ureq = { version = "2", features = ["json", "tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+runtime-conformance = { path = "../runtime-conformance" }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
