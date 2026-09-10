@@ -1,6 +1,6 @@
 //! Universal Embedded Model Runtime — Model Intelligence 契约类型。
 //!
-//! 本 crate 覆盖总案 §41.2 ModelInfo Contract 与 §41.3 CapabilityRecord
+//! 本 crate 覆盖总案 §41.2 ModelProfile Contract 与 §41.3 CapabilityRecord
 //! Contract，以及 §13 的字段级数据优先级仲裁。
 //!
 //! 铁律速查（总案 §67）：
@@ -16,21 +16,24 @@ pub mod capability;
 pub mod catalog;
 pub mod compatibility;
 pub mod deployment;
+pub mod effort;
 pub mod evidence;
 pub mod identity;
 pub mod model;
 pub mod probe;
 pub mod registry;
+pub mod resolved;
 pub mod resolver;
 
 pub use capability::{CapabilityKind, CapabilityRecord, CapabilityStatus};
 pub use catalog::{Catalog, CatalogFormatError, CatalogSource};
 pub use compatibility::{CompatibilityFeature, CompatibilityLevel, CompatibilityProfile};
 pub use deployment::{Deployment, Endpoint, ProtocolKind};
+pub use effort::{EffortResolution, ReasoningEffort};
 pub use evidence::{Evidence, EvidenceSource};
 pub use identity::{normalize_model_id, ModelIdentity};
 pub use model::{
-    Modality, ModelInfo, ModelLimits, ModelModalities, Pricing, ReasoningInfo,
+    Modality, ModelLimits, ModelModalities, ModelProfile, ParameterSupport, Pricing, ReasoningInfo,
     StructuredOutputInfo, ToolSupport,
 };
 pub use probe::{
@@ -38,6 +41,7 @@ pub use probe::{
     ProbeTestType,
 };
 pub use registry::ModelRegistry;
+pub use resolved::{EvidenceSummary, ResolvedModel};
 pub use resolver::{
     resolve, FieldCandidate, FieldCategory, FieldValue, Resolution, NUMERIC_CONFLICT_TOLERANCE,
 };

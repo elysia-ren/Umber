@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::identity::ModelIdentity;
-use crate::model::ModelInfo;
+use crate::model::ModelProfile;
 
 /// Runtime 支持的 Catalog 格式兼容区间（总案 §51）：区间外拒绝加载并提示。
 pub const SUPPORTED_FORMAT_MIN: u32 = 1;
@@ -32,7 +32,7 @@ pub struct Catalog {
     pub identities: Vec<ModelIdentity>,
     /// 身份级知识条目（`deployment` 为空）；运行时经 Discovery 绑定 Deployment。
     #[serde(default)]
-    pub entries: Vec<ModelInfo>,
+    pub entries: Vec<ModelProfile>,
 }
 
 /// Catalog 格式版本不兼容。

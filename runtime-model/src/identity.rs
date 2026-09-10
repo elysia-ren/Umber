@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// 统一模型身份（总案 §9）。
+/// 统一模型身份（总案 §9；规格 X.1）。
 ///
 /// 铁律：Identity 相同 ≠ Deployment 能力完全相同，因此必须保留 Deployment。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -11,6 +11,10 @@ pub struct ModelIdentity {
     pub family: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// 模型的归属组织（规格 X.1 的 organization，如 "deepseek-ai"）。
+    /// 与 provider 不同：provider 是"谁提供服务"，organization 是"谁做的模型"。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
     #[serde(default)]
     pub aliases: Vec<String>,
 }
@@ -45,6 +49,7 @@ mod tests {
             canonical_id: "official/model-x".into(),
             family: "model-x".into(),
             version: None,
+            organization: Some("example".into()),
             aliases: vec!["gateway/model-x".into(), "Model-X".into()],
         }
     }

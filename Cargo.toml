@@ -12,7 +12,7 @@ members = [
     "runtime-ui",
     "runtime-ui-egui",
     "runtime-ffi",
-    "catalog-builder",
+    "runtime-data",
 ]
 
 [workspace.package]

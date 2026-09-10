@@ -25,6 +25,7 @@ model-runtime/
 ├── runtime-credential-os/ 平台凭据（系统钥匙串 / 加密文件 / 回退链）
 ├── runtime-ui/            UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
 ├── runtime-ffi/           Stable C ABI（拉取式）+ C/Python 绑定；唯一允许 unsafe 的 crate
+├── runtime-data/          Model Data Pipeline & Database（上游适配器 / 规范化 / 冲突解析 / 本地库）
 └── catalog-builder/       数据供应链流水线（不随宿主分发）
 ```
 
@@ -44,7 +45,7 @@ model-runtime/
 | M7 Probe | 完成：Passive 白名单强制 / Active 显式开启 / 四类失效触发 |
 | M8 Catalog Builder | 完成：规范化 / 身份合并 / 冲突检测 / 许可证门禁 / CLI |
 | M9 FFI 稳定化 | 完成：C ABI + **系统代理发现** + **OS 凭据三档回退** + cbindgen 生成头文件 + Python ctypes 绑定 + C 宿主示例 |
-| M10 Runtime UI | **完成**：UISpec 数据契约 + **egui/eframe 参考实现**（主题 token 明暗双套 / 密度 / 缩放 / 系统中文字体 / schema 驱动渲染 / 无头帧测试 / settings-demo 演示，实测 exe 6.7 MB） |
+| M10 Runtime UI | **完成**：UISpec 数据契约 + egui/eframe 参考实现（侧栏厂商列表 + 内容区、30 个厂商预置分四类、模型数据呈现、证据行、无头测试、截图脚本） |
 | M11 集成与发布 | 完成：宿主集成指南 + 端到端验收 + `contract-v1` 标记 |
 
 ## 质量状态

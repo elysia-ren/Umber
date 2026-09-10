@@ -83,13 +83,33 @@ impl Default for ReasoningConfig {
 }
 
 /// 统一推理档位。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// **顺序即强弱**（Minimal < Low < Medium < High）——就近降级依赖该顺序
+/// （总案 §21.1，实现见 runtime-model::effort）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReasoningEffort {
     Minimal,
     Low,
     Medium,
     High,
+}
+
+impl ReasoningEffort {
+    /// 全部档位（按强弱）。
+    pub fn all() -> [Self; 4] {
+        [Self::Minimal, Self::Low, Self::Medium, Self::High]
+    }
+
+    /// 协议侧使用的档位名（openai_chat / openai_responses 直接发送该值）。
+    pub fn canonical_label(self) -> &'static str {
+        match self {
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
 }
 
 /// 采样与生成长度参数。

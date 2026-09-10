@@ -1,4 +1,4 @@
-//! Model Registry（总案 §37）：Identity / Deployment / ModelInfo 三层，
+//! Model Registry（总案 §37）：Identity / Deployment / ModelProfile 三层，
 //! 不是 `HashMap<String, Model>`。
 //!
 //! - Catalog 是身份级知识的来源（离线可用，总案 §47）
@@ -14,14 +14,14 @@ use serde::{Deserialize, Serialize};
 use crate::catalog::Catalog;
 use crate::deployment::Deployment;
 use crate::identity::ModelIdentity;
-use crate::model::ModelInfo;
+use crate::model::ModelProfile;
 use crate::resolver::{FieldCandidate, FieldCategory, Resolution};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ModelRegistry {
     deployments: Vec<Deployment>,
-    /// DeploymentId → ModelInfo（deployment 字段已绑定）
-    infos: BTreeMap<String, ModelInfo>,
+    /// DeploymentId → ModelProfile（deployment 字段已绑定）
+    infos: BTreeMap<String, ModelProfile>,
 }
 
 impl ModelRegistry {
@@ -46,16 +46,16 @@ impl ModelRegistry {
         Ok(registry)
     }
 
-    /// Discovery 结果 → 建立 Deployment 并挂接 ModelInfo（总案 §36 流程尾段）。
+    /// Discovery 结果 → 建立 Deployment 并挂接 ModelProfile（总案 §36 流程尾段）。
     ///
     /// 若 Catalog 中存在匹配身份的知识条目，则以其为模板（能力 / 规格 / 价格），
-    /// 绑定到该 Deployment；否则建立仅含身份引用的最小 ModelInfo——
+    /// 绑定到该 Deployment；否则建立仅含身份引用的最小 ModelProfile——
     /// 能力一律 Unknown（§15），绝不假定兼容。
     pub fn register_deployment(
         &mut self,
         deployment: Deployment,
         catalog: Option<&Catalog>,
-    ) -> ModelInfo {
+    ) -> ModelProfile {
         let key = deployment.id.to_string();
         let identity_ref = deployment.model_id.clone();
         let mut info = catalog
@@ -65,11 +65,12 @@ impl ModelRegistry {
                     .find(|e| e.identity.matches(&identity_ref))
                     .cloned()
             })
-            .unwrap_or_else(|| ModelInfo {
+            .unwrap_or_else(|| ModelProfile {
                 identity: ModelIdentity {
                     canonical_id: identity_ref.clone(),
                     family: identity_ref,
                     version: None,
+                    organization: None,
                     aliases: vec![],
                 },
                 deployment: None,
@@ -81,6 +82,7 @@ impl ModelRegistry {
                 reasoning: Default::default(),
                 tool_support: Default::default(),
                 structured_output: Default::default(),
+                parameter_support: Default::default(),
                 pricing: None,
                 compatibility: Default::default(),
                 evidence: vec![],
@@ -95,11 +97,11 @@ impl ModelRegistry {
         &self.deployments
     }
 
-    pub fn info(&self, id: &DeploymentId) -> Option<&ModelInfo> {
+    pub fn info(&self, id: &DeploymentId) -> Option<&ModelProfile> {
         self.infos.get(id.as_ref())
     }
 
-    pub fn infos(&self) -> impl Iterator<Item = &ModelInfo> {
+    pub fn infos(&self) -> impl Iterator<Item = &ModelProfile> {
         self.infos.values()
     }
 
@@ -163,11 +165,12 @@ mod tests {
             CapabilityKind::ToolCall,
             CapabilityRecord::new(CapabilityStatus::Supported, EvidenceSource::OfficialDocs),
         );
-        let catalog_entry = ModelInfo {
+        let catalog_entry = ModelProfile {
             identity: ModelIdentity {
                 canonical_id: "deepseek-chat".into(),
                 family: "deepseek".into(),
                 version: None,
+                organization: Some("deepseek-ai".into()),
                 aliases: vec!["deepseek_v3".into()],
             },
             deployment: None,
@@ -179,6 +182,7 @@ mod tests {
             reasoning: Default::default(),
             tool_support: Default::default(),
             structured_output: Default::default(),
+            parameter_support: Default::default(),
             pricing: None,
             compatibility: Default::default(),
             evidence: vec![],

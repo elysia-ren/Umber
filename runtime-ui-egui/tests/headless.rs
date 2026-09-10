@@ -38,7 +38,7 @@ mod support {
             Err(BackendError::new("discovery.empty", "recording"))
         }
         fn model_info(&self, model_id: &str) -> Option<UiModelInfo> {
-            Some(UiModelInfo::all_unknown(model_id))
+            Some(UiModelInfo::unknown(model_id))
         }
     }
 }

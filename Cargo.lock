@@ -275,15 +275,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "catalog-builder"
-version = "0.1.0"
-dependencies = [
- "runtime-model",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "cc"
 version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2232,6 +2223,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime-data"
+version = "0.1.0"
+dependencies = [
+ "runtime-core",
+ "runtime-model",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "runtime-engine"
 version = "0.1.0"
 dependencies = [
@@ -2311,6 +2312,7 @@ dependencies = [
  "runtime-protocol",
  "runtime-provider",
  "runtime-ui",
+ "serde_json",
 ]
 
 [[package]]

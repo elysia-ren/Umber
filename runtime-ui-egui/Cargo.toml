@@ -16,6 +16,7 @@ runtime-credential = { path = "../runtime-credential" }
 runtime-model = { path = "../runtime-model" }
 runtime-protocol = { path = "../runtime-protocol" }
 runtime-provider = { path = "../runtime-provider" }
+serde_json = { workspace = true }
 
 [[bin]]
 name = "settings-demo"

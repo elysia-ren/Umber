@@ -1,0 +1,16 @@
+[package]
+name = "runtime-data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Model Data Pipeline & Database: external sources -> source adapters -> Canonical Model DB -> Runtime Local DB (规格 X)"
+
+[dependencies]
+runtime-core = { workspace = true }
+runtime-model = { path = "../runtime-model" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[bin]]
+name = "model-data"
+path = "src/main.rs"

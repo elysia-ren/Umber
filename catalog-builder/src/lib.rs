@@ -25,7 +25,7 @@ use runtime_model::capability::{CapabilityKind, CapabilityRecord, CapabilityStat
 use runtime_model::catalog::{Catalog, CatalogSource};
 use runtime_model::evidence::EvidenceSource;
 use runtime_model::identity::ModelIdentity;
-use runtime_model::model::ModelInfo;
+use runtime_model::model::ModelProfile;
 use runtime_model::resolver::{FieldCandidate, FieldCategory, FieldValue};
 use serde::{Deserialize, Serialize};
 
@@ -84,8 +84,8 @@ impl std::fmt::Display for BuildError {
 
 impl std::error::Error for BuildError {}
 
-/// 规范化：RawModel → ModelInfo（身份级，deployment 为空）。
-pub fn normalize(manifest: &SourceManifest, raw: &RawModel) -> ModelInfo {
+/// 规范化：RawModel → ModelProfile（身份级，deployment 为空）。
+pub fn normalize(manifest: &SourceManifest, raw: &RawModel) -> ModelProfile {
     let source = EvidenceSource::ThirdPartyCatalog {
         name: manifest.name.clone(),
     };
@@ -109,7 +109,7 @@ pub fn normalize(manifest: &SourceManifest, raw: &RawModel) -> ModelInfo {
     push(CapabilityKind::Vision, raw.vision);
     push(CapabilityKind::Reasoning, raw.reasoning);
 
-    ModelInfo {
+    ModelProfile {
         identity: ModelIdentity {
             canonical_id: raw.id.clone(),
             family: raw
@@ -153,10 +153,10 @@ pub fn check_license(manifest: &SourceManifest) -> Result<(), BuildError> {
 
 /// 身份合并：规范化 id 相同（或互为人工 alias）的条目合并为一个身份，
 /// 字段用 Resolver 仲裁并保留冲突标记（§13）。
-pub fn merge(entries: &[ModelInfo]) -> Vec<ModelInfo> {
+pub fn merge(entries: &[ModelProfile]) -> Vec<ModelProfile> {
     use std::collections::BTreeSet;
     let mut order: Vec<String> = Vec::new();
-    let mut groups: BTreeMap<String, Vec<&ModelInfo>> = BTreeMap::new();
+    let mut groups: BTreeMap<String, Vec<&ModelProfile>> = BTreeMap::new();
 
     for entry in entries {
         let key = runtime_model::identity::normalize_model_id(&entry.identity.canonical_id);
@@ -216,7 +216,7 @@ pub fn build(sources: &[SourceFile], generated_at_unix: u64) -> Result<Catalog, 
         return Err(BuildError::NoSources);
     }
     let mut catalog_sources = Vec::new();
-    let mut entries: Vec<ModelInfo> = Vec::new();
+    let mut entries: Vec<ModelProfile> = Vec::new();
     for source in sources {
         check_license(&source.manifest)?;
         catalog_sources.push(CatalogSource {

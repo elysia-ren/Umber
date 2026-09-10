@@ -73,8 +73,8 @@ mod backend {
 pub fn open_settings_window(params: SettingsWindowParams) -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([460.0, 640.0])
-            .with_min_inner_size([380.0, 480.0])
+            .with_inner_size([980.0, 880.0])
+            .with_min_inner_size([760.0, 520.0])
             .with_title(params.title.clone()),
         ..Default::default()
     };

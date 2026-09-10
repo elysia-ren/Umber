@@ -4,7 +4,7 @@
 //! egui 默认样式是"开发工具脸"，可替换性契约要求宿主能整层换掉——
 //! 所以 token 只在这一处定义，换皮不动布局代码。
 
-use egui::{Color32, Context, Rounding, Style, Vec2};
+use egui::{Color32, Context, Rounding, Vec2};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThemeMode {
@@ -117,14 +117,21 @@ impl Density {
 }
 
 /// 把 token 应用到 ctx。设计目标是：布局代码零改动即可整体换肤。
+///
+/// **egui 0.29 的坑**：`Style` 是按主题存取的，且 eframe 会按系统主题
+/// 设置 `ThemePreference`，从而用默认 visuals 覆盖我们设的值。
+/// 因此必须先 `set_theme` 固定主题，再写样式；调用方还需在每帧检查
+/// 主题未被改动（见 `SettingsApp::update`）。
 pub fn apply(ctx: &Context, mode: ThemeMode, density: Density, scale: f32) {
     let p = mode.palette();
     ctx.set_pixels_per_point(scale.max(0.5));
+    ctx.set_theme(match mode {
+        ThemeMode::Dark => egui::ThemePreference::Dark,
+        ThemeMode::Light => egui::ThemePreference::Light,
+    });
 
-    let mut style = Style {
-        visuals: egui::Visuals::default(),
-        ..Style::default()
-    };
+    // 以当前主题的样式为基底再定制，避免丢掉该主题的默认设置
+    let mut style = (*ctx.style()).clone();
     style.visuals.dark_mode = mode == ThemeMode::Dark;
     style.visuals.panel_fill = p.panel_bg;
     style.visuals.window_fill = p.window_bg;
@@ -195,11 +202,19 @@ mod tests {
     }
 
     #[test]
-    fn apply_runs_headless() {
+    fn apply_runs_headless_and_pins_the_theme() {
         // 不开窗口也能完整走一遍样式应用（无头可测性）
         let ctx = Context::default();
         apply(&ctx, ThemeMode::Dark, Density::Compact, 1.25);
+        assert_eq!(ctx.theme(), egui::Theme::Dark, "主题必须被钉住");
+        // dark_mode 必须与所选主题一致——否则深色主题配浅色面板
+        assert!(ctx.style().visuals.dark_mode);
+        assert_eq!(ctx.style().visuals.panel_fill, DARK.panel_bg);
+
         apply(&ctx, ThemeMode::Light, Density::Cozy, 1.0);
+        assert_eq!(ctx.theme(), egui::Theme::Light);
+        assert!(!ctx.style().visuals.dark_mode);
+        assert_eq!(ctx.style().visuals.panel_fill, LIGHT.panel_bg);
         assert!((ctx.pixels_per_point() - 1.0).abs() < f32::EPSILON);
     }
 }

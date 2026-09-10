@@ -1,7 +1,7 @@
 //! 端到端集成测试：贯穿 Model Intelligence → 协议 Adapter → Engine 的完整链路。
 //!
 //! 这是"宿主拿到的是什么"的最终验收：Discovery 建立 Deployment → Registry
-//! 挂接 ModelInfo → 用户按 UISpec 配置 → Engine 驱动一次流式调用。
+//! 挂接 ModelProfile → 用户按 UISpec 配置 → Engine 驱动一次流式调用。
 
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ use runtime_engine::{run_invocation, CancelToken, RetryPolicy, TimeoutPolicy};
 use runtime_model::capability::CapabilityKind;
 use runtime_model::catalog::{Catalog, CatalogSource};
 use runtime_model::deployment::{Deployment, Endpoint, ProtocolKind};
-use runtime_model::model::ModelInfo;
+use runtime_model::model::ModelProfile;
 use runtime_model::registry::ModelRegistry;
 use runtime_ui::discovery::{DiscoverySession, UiModelEntry};
 use runtime_ui::schema::{SettingsDraft, SettingsPage};
@@ -78,7 +78,7 @@ fn host_journey_from_settings_to_streamed_answer() {
         model_id: model_id.clone(),
     };
 
-    // 5. Registry：Catalog 有身份级知识 → 绑定为 Deployment 级 ModelInfo（§37）
+    // 5. Registry：Catalog 有身份级知识 → 绑定为 Deployment 级 ModelProfile（§37）
     let catalog = Catalog {
         format_version: 1,
         generated_at_unix: 1,
@@ -89,11 +89,12 @@ fn host_journey_from_settings_to_streamed_answer() {
             url: "https://models.dev".into(),
         }],
         identities: vec![],
-        entries: vec![ModelInfo {
+        entries: vec![ModelProfile {
             identity: runtime_model::identity::ModelIdentity {
                 canonical_id: model_id.clone(),
                 family: "deepseek".into(),
                 version: None,
+                organization: Some("deepseek-ai".into()),
                 aliases: vec![],
             },
             deployment: None,
@@ -108,6 +109,7 @@ fn host_journey_from_settings_to_streamed_answer() {
             reasoning: Default::default(),
             tool_support: Default::default(),
             structured_output: Default::default(),
+            parameter_support: Default::default(),
             pricing: None,
             compatibility: Default::default(),
             evidence: vec![],
