@@ -31,6 +31,10 @@ use runtime_ui::{
 use runtime_ui_egui::{open_settings_window, Density, SettingsWindowParams, ThemeMode};
 
 const KEY_REF: &str = "settings/api_key";
+/// `--selftest` 专用：与正式配置**完全隔离**的凭据引用与钥匙串服务名。
+/// 自检不得读到 / 覆盖 / 删除用户已保存的密钥。
+const SELFTEST_KEY_REF: &str = "selftest/api_key";
+const SELFTEST_SERVICE: &str = "UniversalEmbeddedModelRuntimeTest";
 
 /// 真实的设置后端。
 struct RealBackend {
@@ -67,12 +71,19 @@ fn data_dir() -> std::path::PathBuf {
 
 impl StoreBundle {
     fn open() -> Option<Self> {
-        let dir = data_dir();
-        let db = LocalDb::open(&dir).ok()?;
+        Self::open_in(&data_dir(), None, KEY_REF)
+    }
+
+    /// `service = None` → 正式钥匙串服务名；`Some` 用于 `--selftest` 隔离。
+    fn open_in(dir: &std::path::Path, service: Option<&str>, reference: &str) -> Option<Self> {
+        let db = LocalDb::open(dir).ok()?;
         let credentials_dir = dir.join("credentials");
         let mut tiers: Vec<(CredentialTier, Arc<dyn CredentialStore>)> = Vec::new();
         // 回退顺序（§32.1）：宿主实现 → 系统钥匙串 → 加密文件
-        let keystore = OsKeystore::new();
+        let keystore = match service {
+            Some(name) => OsKeystore::with_service(name),
+            None => OsKeystore::new(),
+        };
         if keystore.is_available() {
             tiers.push((CredentialTier::OsKeystore, Arc::new(keystore)));
         }
@@ -85,13 +96,22 @@ impl StoreBundle {
         Some(Self {
             db,
             credentials: FallbackChain::new(tiers),
-            credential_ref: CredentialRef::from("settings/api_key"),
+            credential_ref: CredentialRef::from(reference),
         })
     }
 }
 
 impl RealBackend {
     fn new() -> Self {
+        Self::build(StoreBundle::open())
+    }
+
+    /// `--selftest` 用：换成隔离存储，其余（目录 / 传输）与正式启动一致。
+    fn with_store(store: StoreBundle) -> Self {
+        Self::build(Some(store))
+    }
+
+    fn build(store: Option<StoreBundle>) -> Self {
         let catalog = load_catalog_from_env();
         if catalog.is_empty() {
             eprintln!(
@@ -105,7 +125,7 @@ impl RealBackend {
             transport: Arc::new(RealHttpTransport::new(HttpConfig::default())),
             catalog,
             provider_models: load_provider_models_from_env(),
-            store: std::sync::Mutex::new(StoreBundle::open()),
+            store: std::sync::Mutex::new(store),
         }
     }
 
@@ -502,7 +522,15 @@ fn load_provider_models_from_env() -> HashMap<String, Vec<String>> {
 ///
 /// 这是"保存到底有没有落盘"的可验证证据——不依赖点击界面。
 fn selftest() -> i32 {
-    let backend = RealBackend::new();
+    // 隔离：独立数据子目录 + 独立凭据引用 + 独立钥匙串服务名。
+    // 此前自检与正式界面共用 `settings/api_key` 与同一个服务名，跑一次就会
+    // 覆盖并删除用户已保存的密钥；现在自检既读不到也删不掉用户的数据。
+    let dir = data_dir().join("selftest");
+    let Some(store) = StoreBundle::open_in(&dir, Some(SELFTEST_SERVICE), SELFTEST_KEY_REF) else {
+        println!("[selftest] FAIL: 无法打开隔离存储 {}", dir.display());
+        return 1;
+    };
+    let backend = RealBackend::with_store(store);
     let mut draft = SettingsDraft::default();
     draft.values.insert("provider".into(), "selftest".into());
     draft.values.insert("protocol".into(), "openai_chat".into());
@@ -552,13 +580,22 @@ fn selftest() -> i32 {
         }
     }
 
-    // 清掉自检写入的凭据与配置，避免污染用户数据
-    if let Ok(guard) = backend.store.lock() {
-        if let Some(bundle) = guard.as_ref() {
-            let _ = bundle.credentials.delete(&bundle.credential_ref);
-        }
+    // 清理：删凭据 + 删整个隔离目录（deployment / override / 加密文件一并消失）
+    let credential_removed = match backend.store.lock() {
+        Ok(guard) => guard
+            .as_ref()
+            .map(|b| b.credentials.delete(&b.credential_ref).unwrap_or(false))
+            .unwrap_or(false),
+        Err(_) => false,
+    };
+    // 先释放 LocalDb / 加密文件句柄，再删目录（Windows 上句柄会挡住删除）
+    drop(backend);
+    let dir_removed = std::fs::remove_dir_all(&dir).is_ok() || !dir.exists();
+    println!("[selftest] 清理: credential={credential_removed} dir={dir_removed}");
+    if !dir_removed {
+        println!("[selftest] 提示: 隔离目录未删净 {}", dir.display());
     }
-    println!("[selftest] PASS（已清理自检写入的凭据）");
+    println!("[selftest] PASS（自检使用隔离存储，用户配置与密钥未被触碰）");
     0
 }
 
