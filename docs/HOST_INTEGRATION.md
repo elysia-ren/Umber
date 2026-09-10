@@ -78,10 +78,49 @@ let outcome = run_invocation(
 
 ## 4. 凭据
 
-- 用 `CredentialStore` 抽象；桌面端实现放 OS Keystore（Windows Credential Manager / Keychain / libsecret）
-- 回退顺序：宿主实现 → OS Keystore → 加密文件 + 明确告警（§32.1）
+三层回退（`runtime-credential-os`，总案 §32.1）：
+
+```rust
+use runtime_credential_os::{CredentialTier, EncryptedFileStore, FallbackChain, OsKeystore};
+use std::sync::Arc;
+
+let chain = FallbackChain::new(vec![
+    // 1) 宿主自己的实现（例如企业密钥管理）
+    (CredentialTier::Host, host_store),
+    // 2) 操作系统钥匙串：Windows Credential Manager / macOS Keychain / libsecret
+    (CredentialTier::OsKeystore, Arc::new(OsKeystore::new())),
+    // 3) 加密文件（ChaCha20-Poly1305）
+    (CredentialTier::EncryptedFile, Arc::new(EncryptedFileStore::open(dir)?)),
+]);
+
+// 启动时探测实际生效的层级；落到 EncryptedFile 必须在 UI 上告警
+if let Some(tier) = chain.probe() {
+    if tier.requires_user_warning() {
+        // 渲染 strings()[tier.label_key()] 给出的提示
+    }
+}
+```
+
+- 读操作按优先级回退；写操作默认写入所有可用层，使回退对用户透明
 - `SecretString` 的 Debug/Display 输出为 `***`；`redact_json` / `redact_text`
   用于任何要写日志或诊断的原始载荷（§28）
+- **加密文件层的边界**：密钥与数据同机，防的是"配置文件被顺手读走 / 同步到云盘"，
+  不防本机恶意软件——所以告警是契约要求，不是可选。
+
+## 4.1 网络与代理
+
+`RealHttpTransport` 的代理解析顺序：
+
+```text
+显式配置（HttpConfig::proxy）
+    ↓ 未设置
+环境变量（ALL_PROXY / HTTPS_PROXY / HTTP_PROXY，大小写均支持）
+    ↓ 未设置
+系统代理（Windows：Internet 设置注册表；macOS：scutil --proxy）
+```
+
+**系统代理这一档是桌面场景的必需项**：用户在系统设置里开代理时不会设置环境变量，
+缺这一档会让宿主在用户机器上莫名连不上。
 
 ## 5. 设置界面（UISpec，§38）
 
@@ -137,6 +176,31 @@ ABI 硬规则（总案 §50.2）：句柄谁分配谁释放；panic 不穿越边
 catch_unwind）；字符串一律 UTF-8 + 显式长度；`runtime_stream_cancel` 可与
 `runtime_stream_next` 并发调用。可运行示例见 `runtime-ffi/examples/spike.c`。
 
+**头文件由 Rust 类型生成**（不要手改）：
+
+```text
+cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
+```
+
+### Python（`runtime-ffi/bindings/python/umer.py`）
+
+纯标准库 `ctypes`，无第三方依赖：
+
+```python
+from umer import Runtime, UmerRuntimeFailure
+
+with Runtime() as rt:
+    with rt.stream({"model": "dep-1", "messages": [...]}) as stream:
+        for event in stream:                      # 迭代到终结事件自动停止
+            print(event["sequence"], event["data"]["event"]["type"])
+        print(stream.partial_text)                # 失败/取消后仍可取回
+```
+
+**ctypes 的所有权陷阱**（绑定层已处理，自己写绑定时务必注意）：
+`UmerEvent.json` 必须声明为 `c_void_p`，不能用 `c_char_p`——后者的字段访问会
+被 ctypes 自动解引用成 Python `bytes`，把 Python 自己的缓冲区交给
+`runtime_string_free` 会造成堆损坏（实测 `0xC0000374`）。
+
 ## 8. 数据供应链（不随宿主分发）
 
 模型元数据由 `catalog-builder` 于构建期生成：
@@ -158,3 +222,4 @@ catalog-builder source1.json source2.json -o catalog.json
 | 把 `retryable` 当作"必须重试" | 已产出内容被重复计费 | 由 Engine 决策，宿主不干预（§29） |
 | 依赖第三方 catalog 服务在线 | 断网即不可用 | 用 Bundled Catalog（§47） |
 | 为每家厂商写分支 | 边界已失败 | 一切差异应在 CompatibilityProfile（§16） |
+| 要求用户设置代理环境变量 | 开了系统代理的用户会连不上 | 传输层已读系统代理；自定义传输也要处理 |
