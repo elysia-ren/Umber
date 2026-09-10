@@ -40,10 +40,18 @@ M10 交付；本轮不动。
 
 ## §41.6 FFI / ABI Contract
 
-**ABI spike PASS**（C 宿主 + MSVC 实测；头文件已由 cbindgen 从 Rust 类型生成，Python ctypes 绑定实测通过）：握手、拉取式 `runtime_stream_next`
-（阻塞等待 + 超时 + WOULD_BLOCK）、所有权（string_free）、NULL 安全、
-终结保证、全局 sequence、catch_unwind 全入口。每个 unsafe 入口带 `# Safety`
-所有权与线程安全文档。✅
+**ABI 已从 spike 提升为真实链路（0.2）**：`runtime-ffi` 依赖
+`runtime-protocol` / `runtime-credential` / `runtime-model`，C 宿主经
+`runtime_set_deployment` + `runtime_set_credential`（+ `runtime_load_catalog`）
+即可走四协议 Adapter 与真实 HTTP/SSE，与 Rust 宿主同一条链路。
+demo 假流改为**显式开启**（`runtime_set_demo`），未配置时返回
+`UMER_ERR_NOT_CONFIGURED`，不静默返回假数据。
+
+已验证：握手、拉取式 `runtime_stream_next`（阻塞等待 + 超时 + WOULD_BLOCK）、
+所有权（string_free）、NULL 安全、终结保证、全局 sequence、catch_unwind 全入口、
+以及「C ABI → 真实 Adapter → ScriptedTransport → Engine」端到端回归测试。
+头文件由 cbindgen 从 Rust 类型生成；Python ctypes 绑定同步暴露配置入口。
+每个 unsafe 入口带 `# Safety` 所有权与线程安全文档。✅
 
 ## §41.7 Versioning Contract
 

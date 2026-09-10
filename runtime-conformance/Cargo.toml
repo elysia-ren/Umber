@@ -3,6 +3,7 @@ name = "runtime-conformance"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Conformance suite: scripted fake providers, assertions, fixture format (总案 §52)"
 
 [dependencies]

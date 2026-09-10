@@ -3,6 +3,7 @@ name = "runtime-ui-egui"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "egui/eframe reference implementation of the UISpec contract (总案 §38 §41.5; visual layer is replaceable, not a contract)"
 
 [dependencies]

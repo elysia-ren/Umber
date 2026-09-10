@@ -3,6 +3,7 @@ name = "runtime-ui"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "UISpec contract: declarative settings schema, validation, discovery state machine, i18n strings (总案 §38 §41.5)"
 
 [dependencies]

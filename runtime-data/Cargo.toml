@@ -3,6 +3,7 @@ name = "runtime-data"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Model Data Pipeline & Database: external sources -> source adapters -> Canonical Model DB -> Runtime Local DB (规格 X)"
 
 [dependencies]

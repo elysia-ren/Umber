@@ -3,6 +3,7 @@ name = "runtime-credential-os"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Platform credential backends: OS keystore + encrypted file fallback + fallback chain (总案 §32)"
 
 [dependencies]

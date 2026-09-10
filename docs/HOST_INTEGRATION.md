@@ -151,6 +151,13 @@ uint32_t v = runtime_abi_version();          /* (major << 16) | minor */
 if ((v >> 16) != EXPECTED_MAJOR) { /* 拒绝启动 */ }
 
 UmerRuntime* rt = runtime_init();
+
+/* 真实调用：注册部署 + 写凭据（+ 可选加载 Catalog）后再拉流。
+   未配置且未开 demo 时 open 返回 UMER_ERR_NOT_CONFIGURED（不静默给假数据） */
+runtime_set_deployment(rt, config_json, config_len);
+runtime_set_credential(rt, "deepseek/api_key", api_key);
+runtime_load_catalog(rt, "catalog.json");
+
 UmerStream* stream = NULL;
 runtime_stream_open(rt, request_json, len, &stream);
 
@@ -175,6 +182,17 @@ runtime_shutdown(rt);
 ABI 硬规则（总案 §50.2）：句柄谁分配谁释放；panic 不穿越边界（全部入口
 catch_unwind）；字符串一律 UTF-8 + 显式长度；`runtime_stream_cancel` 可与
 `runtime_stream_next` 并发调用。可运行示例见 `runtime-ffi/examples/spike.c`。
+
+ABI 0.2 起，C 宿主拿到的是**和 Rust 宿主同一条真实链路**（四个协议 Adapter +
+真实 HTTP/SSE + Engine 生命周期）：
+
+```text
+runtime_set_deployment(rt, json, len)   注册 Deployment（id/protocol/endpoint_url/model_id）
+runtime_set_credential(rt, ref, secret) 凭据（只在内存，Runtime 不落盘）
+runtime_load_catalog(rt, path)          离线模型知识（可选）
+runtime_status(rt, out)                 运行时状态 JSON（自检用）
+runtime_set_demo(rt, 1)                 显式开启内置假流，仅验证 ABI 形态
+```
 
 **头文件由 Rust 类型生成**（不要手改）：
 

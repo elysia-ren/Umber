@@ -3,6 +3,7 @@ name = "runtime-model"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 description = "Model Intelligence contract types: identity, deployment, capability, evidence, resolver (总案 §41.2–§41.3)"
 
 [dependencies]

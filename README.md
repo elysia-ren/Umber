@@ -24,7 +24,7 @@ model-runtime/
 ├── runtime-credential/    CredentialStore 契约 + 内存实现 + 脱敏工具
 ├── runtime-credential-os/ 平台凭据（系统钥匙串 / 加密文件 / 回退链）
 ├── runtime-ui/            UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
-├── runtime-ffi/           Stable C ABI（拉取式）+ C/Python 绑定；唯一允许 unsafe 的 crate
+├── runtime-ffi/           Stable C ABI（拉取式，**已接真实协议**）+ C/Python 绑定；唯一允许 unsafe 的 crate
 ├── runtime-data/          Model Data Pipeline & Database（上游适配器 / 规范化 / 冲突解析 / 本地库）
 └── runtime-ffi 之外的数据侧工具见 runtime-data 的 `model-data` CLI
 ```
@@ -44,17 +44,17 @@ model-runtime/
 | M6 Model Intelligence | 完成：Registry 三层 + 字段级仲裁 + Catalog 加载 |
 | M7 Probe | 完成：Passive 白名单强制 / Active 显式开启 / 四类失效触发 |
 | M8 Catalog Builder | 完成：规范化 / 身份合并 / 冲突检测 / 许可证门禁 / CLI |
-| M9 FFI 稳定化 | 完成：C ABI + **系统代理发现** + **OS 凭据三档回退** + cbindgen 生成头文件 + Python ctypes 绑定 + C 宿主示例 |
+| M9 FFI 稳定化 | 完成：C ABI + **系统代理发现** + **OS 凭据三档回退** + cbindgen 生成头文件 + Python ctypes 绑定 + C 宿主示例；**ABI 0.2 起 C 宿主走真实协议链路**（部署 / 凭据 / Catalog 三个配置入口） |
 | M10 Runtime UI | **完成**：UISpec 数据契约 + egui/eframe 参考实现（侧栏厂商列表 + 内容区、30 个厂商预置分四类、模型数据呈现、证据行、无头测试、截图脚本） |
 | M11 集成与发布 | 完成：宿主集成指南 + 端到端验收 + `contract-v1` 标记 |
 
 ## 质量状态
 
 ```text
-155 个测试通过（154 pass + 1 ignored 写真实钥匙串）
+295 个测试（285 passed + 10 ignored：真实网络冒烟 9 + 真实钥匙串写入 1）
 cargo clippy -D warnings 零警告   |   cargo fmt 干净
-真实网络验证：8/8 通过（含 DeepSeek 真实流式生成、工具调用、中途取消）
-设置窗口实测（release）：exe 6.7 MB，窗口正常启动渲染（RSS ~120 MB，见 UI 选型节）
+真实网络验证：9 个用例（端点可达 3 + 真实流式 5 + HTTPS 往返 1），需凭据，CI 不跑
+设置窗口实测（release）：exe 7.4 MB，窗口正常启动渲染（RSS ~120 MB，见 UI 选型节）
 ```
 
 ## UI 技术选型（egui/eframe，已实施）
@@ -70,7 +70,7 @@ cargo clippy -D warnings 零警告   |   cargo fmt 干净
 - 明暗双主题 token + Compact/Cozy 密度 + `pixels_per_point` 缩放（§38 四渲染参数）
 - 中文回退字体从系统加载（微软雅黑 / 苹方 / Noto CJK），不打包字体（省 10–20 MB）
 - 无头帧测试：不开窗口即可验证完整渲染路径
-- 实测（Windows / release）：exe 6.7 MB；RSS ~120 MB，主要来自 glow/GL 与 winit。
+- 实测（Windows / release）：exe 7.4 MB；RSS ~120 MB，主要来自 glow/GL 与 winit。
   待调优项：裁剪 accesskit、按需重绘（`request_repaint` 节流）、必要时评估
   iced+tiny-skia 纯软渲染路线；**是调优空间，不是选型缺陷**
 - 思考强度控件已进 schema（`default_reasoning_effort`，§21.1 四档位）；
@@ -148,6 +148,17 @@ cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/i
 
 要求：Rust stable（edition 2021，MSRV 1.75）。CI 见 `.github/workflows/ci.yml`
 （fmt / clippy -D warnings / test，三平台矩阵）。
+
+## 许可
+
+本项目采用 **MIT OR Apache-2.0** 双许可（Rust 生态惯例，可任选其一）：
+随宿主软件分发、闭源商用、嵌入专有产品均被允许，无归属义务之外的限制。
+
+- `LICENSE-MIT` / `LICENSE-APACHE`
+- 随包模型数据只收录**可再分发**来源（MIT），OpenRouter 与厂商官方文档
+  标为 reference-only 不进随包产物，见 `docs/MODEL_DATA.md`
+- 第三方依赖按其自身许可（如 `keyring` / `chacha20poly1305` / `egui` /
+  `ureq`）；发布二进制前请自行核对依赖树
 
 ## 版本标记
 
