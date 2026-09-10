@@ -23,7 +23,8 @@ pub mod settings_state;
 pub mod strings;
 
 pub use backend::{
-    BackendError, ConnectionReport, ConnectionTestState, SettingsBackend, UiModelInfo,
+    BackendError, ConnectionReport, ConnectionTestState, SaveReport, SavedSettings,
+    SettingsBackend, UiModelInfo,
 };
 // 能力与协议类型随数据类型一起再导出：UI 层只依赖 runtime-ui 一个契约面
 pub use discovery::{DiscoverySession, DiscoveryState, UiModelEntry};

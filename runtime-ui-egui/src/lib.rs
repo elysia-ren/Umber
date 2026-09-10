@@ -18,7 +18,7 @@ pub mod app;
 pub mod fonts;
 pub mod theme;
 
-pub use app::SettingsApp;
+pub use app::{SaveState, SettingsApp};
 pub use theme::{Density, ThemeMode, UiTheme};
 
 use runtime_ui::SettingsBackend;
@@ -87,8 +87,9 @@ pub fn open_settings_window(params: SettingsWindowParams) -> Result<(), eframe::
             let mut app = SettingsApp::new(params.page, strings, params.backend);
             app.apply_theme(&cc.egui_ctx, params.theme, params.density, params.scale);
             app.install_system_fonts(&cc.egui_ctx);
-            // 开局就把该厂商的目录推荐填上（否则首屏模型列表是空的）
-            app.prime_recommendations();
+            // 先把上次保存的配置恢复回来（若有），再按厂商取推荐；
+            // 否则用户每次打开都要重新配一遍
+            app.load_saved();
             Ok(Box::new(app))
         }),
     )

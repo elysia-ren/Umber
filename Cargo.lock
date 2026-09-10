@@ -2308,6 +2308,8 @@ dependencies = [
  "egui",
  "runtime-core",
  "runtime-credential",
+ "runtime-credential-os",
+ "runtime-data",
  "runtime-model",
  "runtime-protocol",
  "runtime-provider",

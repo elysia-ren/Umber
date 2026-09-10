@@ -32,9 +32,23 @@ use runtime_ui::{
 
 use crate::theme::{semantic, Density, ThemeMode, UiTheme};
 
+/// 保存动作的界面状态。
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum SaveState {
+    #[default]
+    Idle,
+    Saving,
+    Saved {
+        /// 是否同时保存了密钥
+        credential: bool,
+    },
+    Failed(String),
+}
+
 enum JobResult {
     Connection(Result<runtime_ui::ConnectionReport, BackendError>),
     Discovery(Result<Vec<UiModelEntry>, BackendError>),
+    Save(Result<runtime_ui::SaveReport, BackendError>),
 }
 
 struct Job {
@@ -56,6 +70,8 @@ pub struct SettingsApp {
     queried: std::collections::HashSet<String>,
     /// 上次刷新的失败原因（**不静默吞掉**，否则用户点了没反应）
     discovery_error: Option<String>,
+    /// 上次保存的结果（"已保存" / 失败原因）——保存也必须给出可见反馈
+    save_state: SaveState,
     job: Option<Job>,
 }
 
@@ -76,6 +92,7 @@ impl SettingsApp {
             reveal_key: false,
             queried: std::collections::HashSet::new(),
             discovery_error: None,
+            save_state: SaveState::Idle,
             job: None,
         }
     }
@@ -99,6 +116,45 @@ impl SettingsApp {
     /// 按厂商查随包目录，而不是用硬编码名单）。
     pub fn prime_recommendations(&mut self) {
         self.refresh_recommendations();
+    }
+
+    /// 启动时恢复上次保存的配置（若宿主实现了持久化）。
+    pub fn load_saved(&mut self) {
+        if let Some(saved) = self.backend.load_settings() {
+            self.state.restore(&saved);
+        }
+        // 恢复后按恢复出来的厂商取推荐
+        self.refresh_recommendations();
+        // 已保存的模型要保证在列表里（否则选中项指向一个不存在的行）
+        if let Some(model_id) = self.state.selected_model().map(str::to_string) {
+            let profile = self.backend.model_info(&model_id);
+            self.state.add_model(ModelEntry::with_source(
+                model_id,
+                profile,
+                ModelSource::Catalog,
+            ));
+        }
+    }
+
+    /// 保存当前配置（供测试与宿主调用）。真正的持久化由后端完成。
+    pub fn trigger_save(&mut self) {
+        let backend = self.backend.clone();
+        let draft = self.state.to_draft();
+        let api_key = self.state.api_key().to_string();
+        self.save_state = SaveState::Saving;
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("umer-ui-save".into())
+            .spawn(move || {
+                let _ = tx.send(JobResult::Save(backend.save_settings(&draft, &api_key)));
+            })
+            .ok();
+        self.job = Some(Job { rx });
+    }
+
+    /// 上次保存的状态（测试用）。
+    pub fn save_state(&self) -> &SaveState {
+        &self.save_state
     }
 
     /// 触发一次"刷新模型列表"（走服务商 `/models`）。测试用入口。
@@ -490,7 +546,7 @@ impl SettingsApp {
                     self.start_discovery();
                 }
                 // 无密钥时明说刷新会失败（而不是点了没反应）
-                if !self.state.keyless() && self.state.api_key().trim().is_empty() {
+                if self.state.needs_key_input() {
                     ui.label(
                         RichText::new(self.text("providers.refresh_needs_key"))
                             .small()
@@ -862,12 +918,38 @@ impl SettingsApp {
         let mut test = false;
         let mut save = false;
         ui.horizontal(|ui| {
-            let can_save = self.state.is_ready();
+            let can_save = self.state.is_ready() && self.save_state != SaveState::Saving;
             if ui
-                .add_enabled(can_save, egui::Button::new(self.text("settings.save")))
+                .add_enabled(
+                    can_save,
+                    egui::Button::new(RichText::new(self.text("settings.save")).strong()),
+                )
                 .clicked()
             {
                 save = true;
+            }
+            // 保存结果必须可见：成功给确认，失败给原因
+            match &self.save_state {
+                SaveState::Idle => {}
+                SaveState::Saving => {
+                    ui.add(egui::Spinner::new().size(13.0));
+                    ui.label(RichText::new(self.text("settings.saving")).small());
+                }
+                SaveState::Saved { credential } => {
+                    let text = if *credential {
+                        self.text("settings.saved_with_key")
+                    } else {
+                        self.text("settings.saved")
+                    };
+                    ui.label(RichText::new(format!("✓ {text}")).small().color(colors.ok));
+                }
+                SaveState::Failed(reason) => {
+                    let message = format!("{} {reason}", self.text("settings.save_failed"));
+                    ui.add(
+                        egui::Label::new(RichText::new(message).small().color(colors.danger))
+                            .wrap(),
+                    );
+                }
             }
             if ui.button(self.text("connection.test")).clicked() {
                 test = true;
@@ -901,8 +983,7 @@ impl SettingsApp {
             self.start_connection_test();
         }
         if save {
-            // 无宿主回调时的演示语义：把就绪状态显式呈现
-            self.connection = ConnectionTestState::Ok { latency_ms: 0 };
+            self.trigger_save();
         }
     }
 
@@ -1008,6 +1089,25 @@ impl SettingsApp {
                         });
                     }
                 }
+                self.job = None;
+            }
+            Ok(JobResult::Save(result)) => {
+                self.save_state = match result {
+                    Ok(report) => {
+                        if report.saved_credential {
+                            // 密钥已进凭据存储：清出界面状态，只记"有"
+                            self.state.mark_key_saved();
+                        }
+                        SaveState::Saved {
+                            credential: report.saved_credential,
+                        }
+                    }
+                    Err(e) => SaveState::Failed(if e.detail.trim().is_empty() {
+                        self.text(&e.reason_key)
+                    } else {
+                        e.detail
+                    }),
+                };
                 self.job = None;
             }
             Err(TryRecvError::Empty) => {}
