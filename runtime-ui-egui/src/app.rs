@@ -101,6 +101,26 @@ impl SettingsApp {
         self.refresh_recommendations();
     }
 
+    /// 触发一次"刷新模型列表"（走服务商 `/models`）。测试用入口。
+    pub fn trigger_discovery(&mut self) {
+        self.start_discovery();
+    }
+
+    /// 处理已完成的后台动作。测试用入口（正常由 `ui()` 每帧调用）。
+    pub fn poll_pending(&mut self) {
+        self.poll_job();
+    }
+
+    /// 上次刷新的失败原因；`None` 表示上次没有失败。
+    pub fn discovery_error(&self) -> Option<&str> {
+        self.discovery_error.as_deref()
+    }
+
+    /// 是否正在等后台动作完成。
+    pub fn is_busy(&self) -> bool {
+        self.job.is_some()
+    }
+
     pub fn state_mut(&mut self) -> &mut SettingsState {
         &mut self.state
     }
@@ -975,9 +995,17 @@ impl SettingsApp {
                             })
                             .collect();
                         self.state.apply_discovery(entries);
+                        // 成功就清掉上一次的错误，否则用户会以为这次也失败了
+                        self.discovery_error = None;
                     }
-                    Err(_) => {
-                        // 发现失败不阻断：用户可以手动添加（§36）
+                    Err(e) => {
+                        // **绝不静默吞掉**：刷新失败必须让用户看到原因。
+                        // （这里曾经是 `Err(_) => {}`，表现就是"点了没反应"）
+                        self.discovery_error = Some(if e.detail.trim().is_empty() {
+                            self.text(&e.reason_key)
+                        } else {
+                            e.detail
+                        });
                     }
                 }
                 self.job = None;
