@@ -116,7 +116,10 @@ mod tests {
             .set(&reference, SecretString::new("value-123"))
             .unwrap();
         assert!(store.exists(&reference).unwrap());
-        assert_eq!(store.get(&reference).unwrap().unwrap().expose(), "value-123");
+        assert_eq!(
+            store.get(&reference).unwrap().unwrap().expose(),
+            "value-123"
+        );
         assert!(store.delete(&reference).unwrap());
         assert!(!store.exists(&reference).unwrap());
     }

@@ -150,7 +150,9 @@ impl CredentialStore for FallbackChain {
         match (wrote_any, last_error) {
             (true, _) => Ok(()),
             (false, Some(e)) => Err(e),
-            (false, None) => Err(CredentialError::Backend("no credential tier available".into())),
+            (false, None) => Err(CredentialError::Backend(
+                "no credential tier available".into(),
+            )),
         }
     }
 
@@ -198,7 +200,10 @@ mod tests {
         FallbackChain::new(vec![
             (CredentialTier::Host, Arc::new(BrokenStore)),
             (CredentialTier::OsKeystore, Arc::new(BrokenStore)),
-            (CredentialTier::EncryptedFile, Arc::new(InMemoryCredentialStore::new())),
+            (
+                CredentialTier::EncryptedFile,
+                Arc::new(InMemoryCredentialStore::new()),
+            ),
         ])
     }
 
@@ -251,7 +256,10 @@ mod tests {
     fn probe_reports_the_first_working_tier() {
         let chain = FallbackChain::new(vec![
             (CredentialTier::Host, Arc::new(BrokenStore)),
-            (CredentialTier::OsKeystore, Arc::new(InMemoryCredentialStore::new())),
+            (
+                CredentialTier::OsKeystore,
+                Arc::new(InMemoryCredentialStore::new()),
+            ),
         ]);
         assert_eq!(chain.probe(), Some(CredentialTier::OsKeystore));
     }
@@ -274,7 +282,10 @@ mod tests {
         let first = Arc::new(InMemoryCredentialStore::new());
         let chain = FallbackChain::new(vec![
             (CredentialTier::Host, first.clone()),
-            (CredentialTier::OsKeystore, Arc::new(InMemoryCredentialStore::new())),
+            (
+                CredentialTier::OsKeystore,
+                Arc::new(InMemoryCredentialStore::new()),
+            ),
         ])
         .with_write_all(false);
         let reference = CredentialRef::from("k");

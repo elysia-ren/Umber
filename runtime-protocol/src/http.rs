@@ -14,7 +14,7 @@ use std::time::Duration;
 use runtime_core::error::{ErrorDetail, ModelError, TimeoutKind};
 use ureq::{Agent, AgentBuilder, Proxy, Response};
 
-use crate::transport::{Headers, HttpTransport, HttpResponse};
+use crate::transport::{Headers, HttpResponse, HttpTransport};
 
 /// 真实传输的配置。
 #[derive(Debug, Clone)]
@@ -103,10 +103,17 @@ fn resolve_proxy(explicit: Option<String>) -> Option<String> {
 
 /// 环境变量代理（大小写两种写法都覆盖）。
 fn env_proxy() -> Option<String> {
-    ["ALL_PROXY", "all_proxy", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"]
-        .iter()
-        .find_map(|k| std::env::var(k).ok())
-        .filter(|v| !v.trim().is_empty())
+    [
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ]
+    .iter()
+    .find_map(|k| std::env::var(k).ok())
+    .filter(|v| !v.trim().is_empty())
 }
 
 /// 读取操作系统代理设置。

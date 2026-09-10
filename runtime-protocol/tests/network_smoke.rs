@@ -223,10 +223,7 @@ fn report(events: &[SequencedEvent], outcome: &runtime_engine::InvocationOutcome
         outcome.response.as_ref().map(|r| r.usage.clone())
     );
     println!("[smoke] {label}: 回复 = {text}");
-    assert!(
-        !text.trim().is_empty(),
-        "{label}: 真实调用必须返回非空文本"
-    );
+    assert!(!text.trim().is_empty(), "{label}: 真实调用必须返回非空文本");
 }
 
 #[test]
@@ -258,11 +255,18 @@ fn live_deepseek_streaming() {
             &CredentialRef::from(KEY_REF),
         )
         .expect("discovery 应成功");
-    println!("[smoke] deepseek 发现 {} 个模型，例如 {:?}", models.len(), models.first());
+    println!(
+        "[smoke] deepseek 发现 {} 个模型，例如 {:?}",
+        models.len(),
+        models.first()
+    );
     assert!(!models.is_empty());
 
     // 带工具调用的真实往返（§21 Tool 语义）
-    let mut tool_request = GenerateRequest::new(deployment.id.clone(), vec![Message::user("杭州现在几点？用工具查。")]);
+    let mut tool_request = GenerateRequest::new(
+        deployment.id.clone(),
+        vec![Message::user("杭州现在几点？用工具查。")],
+    );
     tool_request.tools = vec![runtime_core::request::Tool {
         name: "get_time".into(),
         description: "查询指定城市的当前时间".into(),
@@ -279,7 +283,13 @@ fn live_deepseek_streaming() {
         let creds = store_with(&key);
         let request = tool_request.clone();
         move || {
-            adapter.execute(&request, &endpoint, &dep, &creds, &CredentialRef::from(KEY_REF))
+            adapter.execute(
+                &request,
+                &endpoint,
+                &dep,
+                &creds,
+                &CredentialRef::from(KEY_REF),
+            )
         }
     };
     let mut tool_events = Vec::new();
@@ -310,7 +320,6 @@ fn live_deepseek_cancellation_mid_stream() {
         return;
     };
     let adapter = OpenAiChatAdapter::new(transport());
-    let credentials = store_with(&key);
     let deployment = deployment(
         &env_model("UMER_SMOKE_DEEPSEEK_MODEL", "deepseek-chat"),
         ProtocolKind::OpenAiChat,
@@ -326,7 +335,13 @@ fn live_deepseek_cancellation_mid_stream() {
         let creds = store_with(&key);
         let request = request.clone();
         move || {
-            adapter.execute(&request, &endpoint, &dep, &creds, &CredentialRef::from(KEY_REF))
+            adapter.execute(
+                &request,
+                &endpoint,
+                &dep,
+                &creds,
+                &CredentialRef::from(KEY_REF),
+            )
         }
     };
 
@@ -343,7 +358,10 @@ fn live_deepseek_cancellation_mid_stream() {
         &RetryPolicy::default(),
         &mut |event| {
             if !cancelled_on_first_delta
-                && matches!(event.event, runtime_core::event::ModelEvent::TextDelta { .. })
+                && matches!(
+                    event.event,
+                    runtime_core::event::ModelEvent::TextDelta { .. }
+                )
             {
                 cancelled_on_first_delta = true;
                 cancel_from_sink.cancel();
@@ -364,7 +382,10 @@ fn live_deepseek_cancellation_mid_stream() {
     assert!(outcome.response.is_none(), "取消不应产生 Completed");
     // 部分结果必须可取回（§25.1）——真实网络下也成立
     let partial = outcome.partial.text();
-    println!("[smoke] 取消时已取回部分内容 {} 字", partial.chars().count());
+    println!(
+        "[smoke] 取消时已取回部分内容 {} 字",
+        partial.chars().count()
+    );
     assert!(
         !partial.trim().is_empty(),
         "取消时已产出的部分内容必须可取回"

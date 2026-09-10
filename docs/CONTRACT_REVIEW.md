@@ -1,6 +1,6 @@
 # Contract Review — 七大契约自审（M0）
 
-对照总案 §41 逐项核对。**状态：七契约全部存在代码级定义；四协议 Adapter 与全部消费方已按契约实现；ABI spike 已通过；待所有者签收后打 `contract-v1` 标记（本机 git 不可用——GitHub 直连被重置且提权安装被拒，标记待 git 可用后补打）。**
+对照总案 §41 逐项核对。**状态：七契约全部存在代码级定义；四协议 Adapter 与全部消费方已按契约实现；ABI spike 已通过；**`contract-v1` 已打标**。**
 
 ## §41.1 Canonical API
 
@@ -40,7 +40,7 @@ M10 交付；本轮不动。
 
 ## §41.6 FFI / ABI Contract
 
-**ABI spike PASS**（C 宿主 + MSVC 实测）：握手、拉取式 `runtime_stream_next`
+**ABI spike PASS**（C 宿主 + MSVC 实测；头文件已由 cbindgen 从 Rust 类型生成，Python ctypes 绑定实测通过）：握手、拉取式 `runtime_stream_next`
 （阻塞等待 + 超时 + WOULD_BLOCK）、所有权（string_free）、NULL 安全、
 终结保证、全局 sequence、catch_unwind 全入口。每个 unsafe 入口带 `# Safety`
 所有权与线程安全文档。✅

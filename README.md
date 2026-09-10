@@ -15,82 +15,131 @@
 
 ```text
 model-runtime/
-├── runtime-core/         Canonical API 契约（Request / Event / Response / Error / Invocation / Usage）
-├── runtime-model/        Model Intelligence（Identity / Deployment / Capability / Evidence / Resolver / Catalog / Registry / Probe）
-├── runtime-engine/       Invocation 引擎（终结保证 / 四段超时 / Retry / 部分结果 / 取消）
-├── runtime-provider/     Provider Adapter trait（§41.4）
-├── runtime-protocol/     四协议 Adapter + SSE/传输/错误映射基建
-├── runtime-conformance/  Conformance 套件（fake-provider / 断言库 / fixture 格式）
-├── runtime-credential/   CredentialStore 契约 + 内存实现 + 脱敏工具
-├── runtime-ui/           UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
-├── runtime-ffi/          Stable C ABI（拉取式）+ C 宿主示例；唯一允许 unsafe 的 crate
-└── catalog-builder/      数据供应链流水线（不随宿主分发）
+├── runtime-core/          Canonical API 契约（Request / Event / Response / Error / Invocation / Usage）
+├── runtime-model/         Model Intelligence（Identity / Deployment / Capability / Evidence / Resolver / Catalog / Registry / Probe）
+├── runtime-engine/        Invocation 引擎（终结保证 / 四段超时 / Retry / 部分结果 / 取消）
+├── runtime-provider/      Provider Adapter trait（§41.4）
+├── runtime-protocol/      四协议 Adapter + 真实 HTTP 传输 + SSE/错误映射基建
+├── runtime-conformance/   Conformance 套件（fake-provider / 断言库 / fixture 格式）
+├── runtime-credential/    CredentialStore 契约 + 内存实现 + 脱敏工具
+├── runtime-credential-os/ 平台凭据（系统钥匙串 / 加密文件 / 回退链）
+├── runtime-ui/            UISpec 契约（设置 schema / 校验 / 发现状态机 / i18n）
+├── runtime-ffi/           Stable C ABI（拉取式）+ C/Python 绑定；唯一允许 unsafe 的 crate
+└── catalog-builder/       数据供应链流水线（不随宿主分发）
 ```
 
 ## 进度
 
+**M0–M11 全部完成**（`contract-v1` 已打标）。
+
 | 里程碑 | 状态 |
 |--------|------|
-| M0 契约冻结 | **完成**：七契约代码级落地 + ABI spike PASS（余：owner 签收后补 `contract-v1` 标记——本机 git 不可用） |
-| M1 Core 骨架 + Conformance 基建 | **完成**：engine（终结保证/四段超时/Retry/部分结果）+ conformance + credential |
-| M2 openai_chat Adapter | **完成**：9 conformance 用例 |
-| M3 anthropic_messages Adapter | **完成**：8 用例（含 thinking 签名透传往返、缓存断点） |
-| M4 openai_responses Adapter | **完成**：6 用例（含 encrypted_content 回传） |
-| M5 gemini Adapter | **完成**：8 用例（含 safety→ContentFiltered、responseSchema 子集映射） |
-| M6 Model Intelligence | **完成**：Registry 三层 + 字段级仲裁接入 + Catalog 加载 |
-| M7 Probe | **完成**：Passive 白名单强制 / Active 显式开启 / 持久缓存与四类失效触发 |
-| M8 Catalog Builder | **完成**：规范化 / 身份合并 / 冲突检测 / 许可证门禁 / CLI |
-| M9 FFI 稳定化 | **形态已验证**（ABI spike PASS）；余：cbindgen 头文件生成、OS Keystore 实现、Python 绑定示例 |
-| M10 Runtime UI | **UISpec 契约完成**（schema/校验/发现状态机/双语 i18n + key 全覆盖测试）；余：视觉参考实现（无 GUI 依赖，随宿主环境落地） |
-| M11 集成与发布 | **文档与端到端验收完成**；余：三平台打包、真实网络冒烟 |
+| M0 契约冻结 | 完成：七契约代码级落地 + ABI spike PASS |
+| M1 Core + Conformance 基建 | 完成：终结保证 / 四段超时 / Retry / 部分结果 |
+| M2 openai_chat | 完成：9 用例 + **真实 DeepSeek 生成、工具调用、取消实测** |
+| M3 anthropic_messages | 完成：8 用例（thinking 签名透传、缓存断点） |
+| M4 openai_responses | 完成：6 用例（encrypted_content 回传） |
+| M5 gemini | 完成：8 用例（safety→ContentFiltered、responseSchema 子集映射） |
+| M6 Model Intelligence | 完成：Registry 三层 + 字段级仲裁 + Catalog 加载 |
+| M7 Probe | 完成：Passive 白名单强制 / Active 显式开启 / 四类失效触发 |
+| M8 Catalog Builder | 完成：规范化 / 身份合并 / 冲突检测 / 许可证门禁 / CLI |
+| M9 FFI 稳定化 | 完成：C ABI + **系统代理发现** + **OS 凭据三档回退** + cbindgen 生成头文件 + Python ctypes 绑定 + C 宿主示例 |
+| M10 Runtime UI | 完成：UISpec 数据契约（schema / 校验 / 发现状态机 / 双语 key 全覆盖测试） |
+| M11 集成与发布 | 完成：宿主集成指南 + 端到端验收 + `contract-v1` 标记 |
 
 ## 质量状态
 
 ```text
-142 个测试全绿   |   cargo clippy -D warnings 零警告   |   cargo fmt 干净
+149 个测试通过（148 pass + 1 ignored 写真实钥匙串）
+cargo clippy -D warnings 零警告   |   cargo fmt 干净
+真实网络验证：8/8 通过（含 DeepSeek 真实流式生成、工具调用、中途取消）
 ```
 
-各 crate 测试分布：core 16 · model 24 · engine 11 · protocol 43 · ui 10 ·
-conformance 6 · credential 4 · ffi 5 · catalog-builder 3 · 端到端旅程 1 · 契约往返 1 …
+## 真实网络验证结果
+
+```text
+DeepSeek 流式生成     24 事件 / EndTurn / usage 11→19 / 真实回复文本        ✅
+DeepSeek 工具调用     tool_choice=Required → get_time {"city":"杭州"}        ✅
+DeepSeek 中途取消     4 事件后 Cancelled，取回部分内容 + 部分结果保证成立    ✅
+四家官方端点可达      DeepSeek / OpenAI(Chat+Responses) / Anthropic / Gemini ✅
+系统代理发现          Windows 系统代理（127.0.0.1:7897）自动生效（否则连不上）✅
+Windows 钥匙串        写入 → 读取 → 删除 真实往返                            ✅
+C 宿主（MSVC）        生成头文件下依然 PASS                                   ✅
+Python ctypes 绑定    7 事件 + 终结事件 + 所有权正确（无堆损坏）              ✅
+```
+
+复现：
+
+```text
+cargo test -p runtime-protocol --test network_smoke -- --ignored --nocapture
+cargo test -p runtime-credential-os os_keystore_round_trip -- --ignored
+runtime-ffi\examples\build_spike.cmd debug
+python runtime-ffi\bindings\python\umer.py
+```
 
 ## 已验证的关键保证（每条都有对应测试）
 
 ```text
 终结事件保证        断流 / EOF / 畸形 / 取消 → 恰好一个终结事件（§23.1）
-部分结果保证        失败或取消后 partial() 仍可取回内容与 usage（§25.1）
+部分结果保证        失败或取消后 partial() 仍可取回内容与 usage（§25.1）— 真实网络下已验证
 请求体格式          四协议各自形状 + 默认档位不冗余发送
 签名透传            Anthropic thinking signature / Responses encrypted_content 原样往返（§19.1）
 缓存断点            块级 cache_control → Anthropic system cache_control（§20）
 错误映射            429/529/配额/上下文超长/安全拦截 → 14 类 ModelError（§28）
-并发工具调用        按 index / call_id 归属重组（§24）
+并发工具调用        按 index / call_id 归属重组（§24）— 真实网络下已验证
 Discovery 回退      无 /models 不阻断，可手动添加 Model ID（§36）
 字段级仲裁          行为/规格/价格/身份四表 + 用户覆盖最优先 + 5% 数字冲突阈值（§13）
 Probe 门禁          Passive 只允许非生成性方法；Active 需显式开启（§17）
 许可证门禁          白名单外的数据源直接拒绝构建（§62）
 脱敏                敏感 header / JSON key 强制脱敏，SecretString 打码（§28 §32）
-ABI                 C 宿主实测：握手 / 拉取 / WOULD_BLOCK / 所有权 / NULL 安全（§50）
+凭据回退链          宿主 → 系统钥匙串 → 加密文件；落到加密文件时强制告警（§32.1）
+加密文件存储        ChaCha20-Poly1305，明文不落盘，错密钥必须报错（测试强制）
+ABI                 C 宿主 + Python 绑定实测：握手 / 拉取 / WOULD_BLOCK / 所有权 / NULL 安全（§50）
 端到端旅程          UISpec 配置 → 凭据 → 发现回退 → Endpoint 覆盖 → Registry → Adapter → Engine
 ```
+
+## 真实世界踩到的三个问题（fixtures 抓不到，已修复）
+
+1. **纯文本错误体**：DeepSeek 无凭据返回 `Authentication Fails (governor)`（非 JSON）。
+   传输层原先要求 JSON 并报 Unknown 错误 → 改为返回 `HttpResponse::Text`，
+   由协议层统一映射为 `AuthenticationFailed`。
+2. **系统代理**：用户在 Windows"Internet 选项"里开代理不会设环境变量，
+   而 ureq 只读环境变量 → 传输层新增系统代理发现（Windows 注册表 / macOS `scutil`）。
+   不修这条，宿主在用户机器上会莫名连不上。
+3. **ctypes 所有权陷阱**：`c_char_p` 字段访问会解引用成 Python bytes，
+   交给 `runtime_string_free` 等于 free 掉 Python 自己的缓冲区（实测堆损坏 `0xC0000374`）
+   → 绑定层改用 `c_void_p` 保持原始指针。
 
 ## 本地开发
 
 ```text
-cargo test                                  # 全量测试（142）
+cargo test                                  # 全量测试
 cargo clippy --all-targets -- -D warnings   # 零警告门禁
 cargo fmt                                   # 格式化
 
 # C ABI 示例（Windows / MSVC）
 runtime-ffi\examples\build_spike.cmd debug
+
+# 重新生成 C 头文件（Rust 类型是唯一真值）
+cbindgen --config runtime-ffi/cbindgen.toml --crate runtime-ffi -o runtime-ffi/include/umer.h
 ```
 
 要求：Rust stable（edition 2021，MSRV 1.75）。CI 见 `.github/workflows/ci.yml`
 （fmt / clippy -D warnings / test，三平台矩阵）。
 
-## 待办（环境相关，非设计缺口）
+## 版本标记
 
-1. **`contract-v1` 标记**：本机 GitHub 直连被重置、提权安装被拒，git 不可用；
-   七契约自审已通过（`docs/CONTRACT_REVIEW.md`）。
-2. **真实网络冒烟**：当前全部经 `ScriptedTransport`；每个协议需在联网环境对
-   真实端点各做一次人工冒烟（计划中的"人工门禁"）。
-3. **真实 HttpTransport**：TLS / 代理 / 读超时实现——接缝已就绪（`HttpTransport` trait）。
-4. **覆盖率测量**：需 llvm-cov/tarpaulin 工具链（计划门槛 core ≥85%）。
+```text
+contract-v1    七大契约冻结（Canonical API / ModelInfo / CapabilityRecord /
+               Provider Adapter / UISpec / FFI-ABI / Versioning）
+```
+
+## 未做的与原因（非设计缺口）
+
+```text
+真实冒烟需要凭据   四协议的"真实生成"冒烟已就位（network_smoke.rs），
+                  通过环境变量 UMER_SMOKE_*_KEY 启用；CI 永不消耗真实 Token
+覆盖率测量         需 llvm-cov/tarpaulin 工具链，未在计划门槛内强制
+参考 UI 视觉实现   UISpec 数据契约已冻结；视觉层随宿主环境落地（契约特意不依赖 GUI 库）
+```
+

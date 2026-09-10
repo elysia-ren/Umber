@@ -248,7 +248,10 @@ mod tests {
         }
         // 重新打开：密钥复用，数据可解密
         let store = EncryptedFileStore::open(&dir).unwrap();
-        assert_eq!(store.get(&reference).unwrap().unwrap().expose(), "sk-secret-1");
+        assert_eq!(
+            store.get(&reference).unwrap().unwrap().expose(),
+            "sk-secret-1"
+        );
         assert!(store.delete(&reference).unwrap());
         assert!(!store.exists(&reference).unwrap());
         let _ = fs::remove_dir_all(&dir);
