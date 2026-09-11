@@ -391,7 +391,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.siliconflow.cn"),
         badge: "硅",
         catalog_provider_ids: &["siliconflow", "siliconflow-cn"],
-        offerings: &[ProviderOffering::chat("https://api.siliconflow.cn/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://api.siliconflow.cn/v1"),
+            // Anthropic 兼容的 base 是裸 host（官方 Claude Code 文档：ANTHROPIC_BASE_URL=https://api.siliconflow.cn/）
+            ProviderOffering::anthropic("https://api.siliconflow.cn"),
+        ],
     },
     ProviderPreset {
         id: "modelscope",
@@ -402,9 +406,13 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://www.modelscope.cn/docs"),
         badge: "魔",
         catalog_provider_ids: &["modelscope"],
-        offerings: &[ProviderOffering::chat(
-            "https://api-inference.modelscope.cn/v1",
-        )],
+        offerings: &[
+            ProviderOffering::chat("https://api-inference.modelscope.cn/v1"),
+            // 官方文档「Responses API」节：仅支持 create，且模型目前限 Qwen 系列
+            ProviderOffering::responses("https://api-inference.modelscope.cn/v1"),
+            // 官方「Anthropic API 兼容接口」节，标注为 beta
+            ProviderOffering::anthropic("https://api-inference.modelscope.cn"),
+        ],
     },
     ProviderPreset {
         id: "openrouter",
@@ -415,7 +423,12 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://openrouter.ai/docs"),
         badge: "OR",
         catalog_provider_ids: &["openrouter"],
-        offerings: &[ProviderOffering::chat("https://openrouter.ai/api/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://openrouter.ai/api/v1"),
+            ProviderOffering::responses("https://openrouter.ai/api/v1"),
+            // 官方 Anthropic 接入示例：ANTHROPIC_BASE_URL=https://openrouter.ai/api（注意不是 /api/v1）
+            ProviderOffering::anthropic("https://openrouter.ai/api"),
+        ],
     },
     ProviderPreset {
         id: "together",
@@ -426,7 +439,10 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.together.ai"),
         badge: "T",
         catalog_provider_ids: &["togetherai"],
-        offerings: &[ProviderOffering::chat("https://api.together.xyz/v1")],
+        offerings: &[
+            // 官方现行文档只用 api.together.ai；旧的 api.together.xyz 在文档中已不再出现
+            ProviderOffering::chat("https://api.together.ai/v1"),
+        ],
     },
     ProviderPreset {
         id: "fireworks",
@@ -437,9 +453,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.fireworks.ai"),
         badge: "F",
         catalog_provider_ids: &["fireworks", "fireworks-ai"],
-        offerings: &[ProviderOffering::chat(
-            "https://api.fireworks.ai/inference/v1",
-        )],
+        offerings: &[
+            ProviderOffering::chat("https://api.fireworks.ai/inference/v1"),
+            ProviderOffering::responses("https://api.fireworks.ai/inference/v1"),
+            ProviderOffering::anthropic("https://api.fireworks.ai/inference"),
+        ],
     },
     ProviderPreset {
         id: "nvidia",
@@ -475,7 +493,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.ollama.com/api/openai-compatibility"),
         badge: "OL",
         catalog_provider_ids: &[],
-        offerings: &[ProviderOffering::chat("http://localhost:11434/v1")],
+        offerings: &[
+            ProviderOffering::chat("http://localhost:11434/v1"),
+            ProviderOffering::responses("http://localhost:11434/v1"),
+            ProviderOffering::anthropic("http://localhost:11434"),
+        ],
     },
     ProviderPreset {
         id: "lmstudio",
@@ -486,7 +508,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://lmstudio.ai/docs/app/api"),
         badge: "LM",
         catalog_provider_ids: &[],
-        offerings: &[ProviderOffering::chat("http://localhost:1234/v1")],
+        offerings: &[
+            ProviderOffering::chat("http://localhost:1234/v1"),
+            ProviderOffering::responses("http://localhost:1234/v1"),
+            ProviderOffering::anthropic("http://localhost:1234"),
+        ],
     },
     ProviderPreset {
         id: "vllm",
@@ -497,7 +523,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html"),
         badge: "vL",
         catalog_provider_ids: &[],
-        offerings: &[ProviderOffering::chat("http://localhost:8000/v1")],
+        offerings: &[
+            ProviderOffering::chat("http://localhost:8000/v1"),
+            ProviderOffering::responses("http://localhost:8000/v1"),
+            ProviderOffering::anthropic("http://localhost:8000"),
+        ],
     },
     // ==================== 自定义 ====================
     ProviderPreset {
