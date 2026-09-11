@@ -150,9 +150,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://open.bigmodel.cn/dev/api"),
         badge: "智",
         catalog_provider_ids: &["zhipuai", "zhipuai-coding-plan"],
-        offerings: &[ProviderOffering::chat(
-            "https://open.bigmodel.cn/api/paas/v4",
-        )],
+        offerings: &[
+            ProviderOffering::chat("https://open.bigmodel.cn/api/paas/v4"),
+            // 官方「Claude API 兼容」页：base 为 https://open.bigmodel.cn/api/anthropic
+            ProviderOffering::anthropic("https://open.bigmodel.cn/api/anthropic"),
+        ],
     },
     ProviderPreset {
         id: "dashscope",
@@ -163,9 +165,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://help.aliyun.com/zh/model-studio/"),
         badge: "阿",
         catalog_provider_ids: &["alibaba", "alibaba-cn"],
-        offerings: &[ProviderOffering::chat(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        )],
+        offerings: &[
+            ProviderOffering::chat("https://dashscope.aliyuncs.com/compatible-mode/v1"),
+            // 官方 Claude Code 文档给出的 Anthropic 兼容端点
+            ProviderOffering::anthropic("https://dashscope.aliyuncs.com/apps/anthropic"),
+        ],
     },
     ProviderPreset {
         id: "moonshot",
@@ -176,7 +180,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://platform.moonshot.cn/docs"),
         badge: "K",
         catalog_provider_ids: &["moonshotai", "moonshotai-cn"],
-        offerings: &[ProviderOffering::chat("https://api.moonshot.cn/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://api.moonshot.cn/v1"),
+            // 官方文档：Anthropic 兼容 base 为 https://api.moonshot.cn/anthropic
+            ProviderOffering::anthropic("https://api.moonshot.cn/anthropic"),
+        ],
     },
     ProviderPreset {
         id: "ark",
@@ -235,7 +243,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.z.ai"),
         badge: "Z",
         catalog_provider_ids: &["zai"],
-        offerings: &[ProviderOffering::chat("https://api.z.ai/api/paas/v4")],
+        offerings: &[
+            ProviderOffering::chat("https://api.z.ai/api/paas/v4"),
+            // 官方 Claude Code 文档给出的 base：https://api.z.ai/api/anthropic
+            ProviderOffering::anthropic("https://api.z.ai/api/anthropic"),
+        ],
     },
     ProviderPreset {
         id: "qianfan",

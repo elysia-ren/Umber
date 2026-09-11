@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use umber_core::error::{ErrorDetail, ModelError};
 use umber_credential::{CredentialRef, CredentialStore, InMemoryCredentialStore, SecretString};
 use umber_credential_os::{CredentialTier, EncryptedFileStore, FallbackChain, OsKeystore};
 use umber_data::{LocalDb, StoredDeployment, UserOverride};
@@ -23,7 +24,7 @@ use umber_protocol::{
     AnthropicAdapter, GeminiAdapter, HttpConfig, HttpTransport, OpenAiChatAdapter,
     OpenAiResponsesAdapter, RealHttpTransport,
 };
-use umber_provider::ProviderAdapter;
+use umber_provider::{DiscoveredModel, ProviderAdapter};
 use umber_ui::{
     BackendError, ConnectionReport, SaveReport, SavedSettings, SettingsBackend, SettingsDraft,
     UiModelEntry, UiModelInfo,
@@ -35,6 +36,44 @@ const KEY_REF: &str = "settings/api_key";
 /// 自检不得读到 / 覆盖 / 删除用户已保存的密钥。
 const SELFTEST_KEY_REF: &str = "selftest/api_key";
 const SELFTEST_SERVICE: &str = "UmberTest";
+
+/// 取 URL 的 `scheme://host[:port]`。模型发现的回退候选要用它——
+/// 不引入 url crate，只按第一个 `/` 切。
+fn origin_of(url: &str) -> Option<String> {
+    let sep = url.find("://")?;
+    let rest = &url[sep + 3..];
+    let host_end = rest.find('/').unwrap_or(rest.len());
+    let host = &rest[..host_end];
+    if host.is_empty() {
+        return None;
+    }
+    Some(format!("{}://{}", &url[..sep], host))
+}
+
+/// 这个错误是否表示"主机可达、只是这家服务没有模型列表端点"。
+///
+/// **"没有模型列表" ≠ "连不上"**：模型列表是厂商级的可选能力（§36 Discovery
+/// 回退：无 `/models` 不阻断）。请求已到达服务端并按路径被拒（404 / 不支持），
+/// 说明网络与鉴权都过了；真正该判失败的只有认证 / 限流 / 超时 / 网络错误。
+fn means_no_model_list(err: &ModelError) -> bool {
+    matches!(
+        err,
+        ModelError::InvalidRequest(_)
+            | ModelError::Unsupported(_)
+            | ModelError::ProviderError {
+                status: Some(404 | 405 | 501),
+                ..
+            }
+    )
+}
+
+/// 模型发现失败的原因。分开是为了让连接测试能区分
+/// "配置不全" / "所有候选都拿不到模型列表"，而后者里还要再分
+/// "服务没有这个端点（不算失败）" 与 "认证/网络失败（算失败）"。
+enum DiscoverError {
+    Config(BackendError),
+    NoModelList(ModelError),
+}
 
 /// 真实的设置后端。
 struct RealBackend {
@@ -182,11 +221,12 @@ impl RealBackend {
         store
     }
 
-    fn adapter_of(
-        draft: &SettingsDraft,
+    /// 协议 → 适配器：全项目只留这一处映射。
+    fn adapter_for(
+        kind: ProtocolKind,
         transport: Arc<dyn HttpTransport>,
     ) -> Arc<dyn ProviderAdapter> {
-        match Self::protocol_of(draft) {
+        match kind {
             ProtocolKind::OpenAiResponses => Arc::new(OpenAiResponsesAdapter::new(transport)),
             ProtocolKind::AnthropicMessages => Arc::new(AnthropicAdapter::new(transport)),
             ProtocolKind::Gemini => Arc::new(GeminiAdapter::new(transport)),
@@ -197,22 +237,117 @@ impl RealBackend {
     }
 }
 
+impl RealBackend {
+    /// 模型发现候选：(协议, 端点)，按尝试顺序。
+    ///
+    /// **模型列表是厂商级能力，不是协议级能力**：多数厂商的 Anthropic / Gemini
+    /// 兼容层只实现对话端点。例如 DeepSeek 官方端点支持表里 Anthropic 兼容只有
+    /// `/messages`，没有 `/models`；而模型列表在同一主机的 OpenAI 兼容端点
+    /// `/v1/models` 上。只用「当前协议 + /models」判断连通性，会把完全可用的
+    /// 配置报成"连接失败"。
+    ///
+    /// 顺序：当前协议自己的端点 → 厂商预置里的 OpenAI 兼容端点 →
+    /// 同源 `{origin}/v1` → 同源 `{origin}`。
+    fn discovery_candidates(
+        draft: &SettingsDraft,
+        endpoint: &Endpoint,
+    ) -> Vec<(ProtocolKind, Endpoint)> {
+        let mut out: Vec<(ProtocolKind, Endpoint)> = Vec::new();
+        let mut push = |kind: ProtocolKind, url: &str| {
+            let url = url.trim();
+            if url.is_empty() || out.iter().any(|(_, e)| e.url == url) {
+                return;
+            }
+            out.push((
+                kind,
+                Endpoint {
+                    id: endpoint.id.clone(),
+                    provider_id: endpoint.provider_id.clone(),
+                    url: url.to_string(),
+                },
+            ));
+        };
+
+        push(Self::protocol_of(draft), &endpoint.url);
+
+        let provider_id = draft.values.get("provider").cloned().unwrap_or_default();
+        if let Some(preset) = umber_ui::preset_by_id(&provider_id) {
+            for offering in preset.offerings {
+                if offering.protocol == ProtocolKind::OpenAiChat {
+                    push(ProtocolKind::OpenAiChat, offering.default_endpoint);
+                }
+            }
+        }
+
+        if let Some(origin) = origin_of(&endpoint.url) {
+            push(ProtocolKind::OpenAiChat, &format!("{origin}/v1"));
+            push(ProtocolKind::OpenAiChat, &origin);
+        }
+
+        out
+    }
+
+    /// 按 (协议, 端点) 取模型列表。
+    fn discover_with(
+        &self,
+        kind: ProtocolKind,
+        endpoint: &Endpoint,
+        credentials: &InMemoryCredentialStore,
+    ) -> Result<Vec<DiscoveredModel>, ModelError> {
+        Self::adapter_for(kind, self.transport.clone()).discover_models(
+            endpoint,
+            credentials,
+            &CredentialRef::from(KEY_REF),
+        )
+    }
+
+    /// 按候选顺序发现模型，第一个成功即返回；全失败时返回**首个**错误
+    /// （即用户所选配置的报错，最相关）。
+    fn discover_any(
+        &self,
+        draft: &SettingsDraft,
+        credentials: &InMemoryCredentialStore,
+    ) -> Result<Vec<DiscoveredModel>, DiscoverError> {
+        let endpoint = Self::endpoint_of(draft).map_err(DiscoverError::Config)?;
+        let mut first: Option<ModelError> = None;
+        for (kind, candidate) in Self::discovery_candidates(draft, &endpoint) {
+            match self.discover_with(kind, &candidate, credentials) {
+                Ok(models) => return Ok(models),
+                Err(err) => {
+                    if first.is_none() {
+                        first = Some(err);
+                    }
+                }
+            }
+        }
+        Err(DiscoverError::NoModelList(first.unwrap_or_else(|| {
+            ModelError::Unknown(ErrorDetail::new("no discovery endpoint candidate"))
+        })))
+    }
+}
+
 impl SettingsBackend for RealBackend {
     fn test_connection(
         &self,
         draft: &SettingsDraft,
         api_key: Option<&str>,
     ) -> Result<ConnectionReport, BackendError> {
-        let endpoint = Self::endpoint_of(draft)?;
         // 关键：用户刚输入的密钥必须送到这里，否则请求没带 key，
         // 只会拿到 provider 的 "Authentication Fails"
         let credentials = self.credentials_for(api_key);
-        let adapter = Self::adapter_of(draft, self.transport.clone());
         let started = std::time::Instant::now();
-        // 连接测试 = GET /models（Passive；§17.1）
-        adapter
-            .discover_models(&endpoint, &credentials, &CredentialRef::from(KEY_REF))
-            .map_err(|e| BackendError::new("connection.failed", e.to_string()))?;
+        // 连接测试 = GET /models（Passive；§17.1）。
+        // 但**拿不到模型列表不等于连不上**：见 discovery_candidates 与
+        // means_no_model_list 的说明。
+        match self.discover_any(draft, &credentials) {
+            Ok(_) => {}
+            Err(DiscoverError::Config(err)) => return Err(err),
+            Err(DiscoverError::NoModelList(err)) => {
+                if !means_no_model_list(&err) {
+                    return Err(BackendError::new("connection.failed", err.to_string()));
+                }
+            }
+        }
         Ok(ConnectionReport {
             latency_ms: started.elapsed().as_millis() as u64,
         })
@@ -223,12 +358,17 @@ impl SettingsBackend for RealBackend {
         draft: &SettingsDraft,
         api_key: Option<&str>,
     ) -> Result<Vec<UiModelEntry>, BackendError> {
-        let endpoint = Self::endpoint_of(draft)?;
         let credentials = self.credentials_for(api_key);
-        let adapter = Self::adapter_of(draft, self.transport.clone());
-        let models = adapter
-            .discover_models(&endpoint, &credentials, &CredentialRef::from(KEY_REF))
-            .map_err(|e| BackendError::new("discovery.no_model_list", e.to_string()))?;
+        let models = match self.discover_any(draft, &credentials) {
+            Ok(models) => models,
+            Err(DiscoverError::Config(err)) => return Err(err),
+            Err(DiscoverError::NoModelList(err)) => {
+                return Err(BackendError::new(
+                    "discovery.no_model_list",
+                    err.to_string(),
+                ))
+            }
+        };
         Ok(models
             .into_iter()
             .map(|m| UiModelEntry {
@@ -616,5 +756,94 @@ fn main() {
     if let Err(e) = open_settings_window(params) {
         eprintln!("settings window failed: {e}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn draft_for(provider: &str, protocol: &str, endpoint: &str) -> SettingsDraft {
+        let mut draft = SettingsDraft::default();
+        draft.values.insert("provider".into(), provider.into());
+        draft.values.insert("protocol".into(), protocol.into());
+        draft.values.insert("endpoint".into(), endpoint.into());
+        draft
+    }
+
+    fn endpoint_of(url: &str) -> Endpoint {
+        Endpoint {
+            id: "ep".into(),
+            provider_id: "p".into(),
+            url: url.into(),
+        }
+    }
+
+    #[test]
+    fn origin_of_keeps_scheme_host_and_port() {
+        assert_eq!(
+            origin_of("https://api.deepseek.com/anthropic").as_deref(),
+            Some("https://api.deepseek.com")
+        );
+        assert_eq!(
+            origin_of("http://localhost:11434/v1").as_deref(),
+            Some("http://localhost:11434")
+        );
+        assert_eq!(
+            origin_of("https://api.deepseek.com").as_deref(),
+            Some("https://api.deepseek.com")
+        );
+        assert_eq!(origin_of("not-a-url"), None);
+    }
+
+    /// 这是本 bug 的回归测试：Anthropic 协议的 DeepSeek 必须回退到
+    /// 厂商的 OpenAI 兼容端点去取模型列表，否则连接测试会误报失败。
+    #[test]
+    fn discovery_falls_back_to_the_vendors_openai_endpoint() {
+        let draft = draft_for(
+            "deepseek",
+            "anthropic_messages",
+            "https://api.deepseek.com/anthropic",
+        );
+        let candidates =
+            RealBackend::discovery_candidates(&draft, &endpoint_of(&draft.values["endpoint"]));
+        assert_eq!(candidates[0].0, ProtocolKind::AnthropicMessages);
+        assert_eq!(candidates[0].1.url, "https://api.deepseek.com/anthropic");
+        assert!(
+            candidates
+                .iter()
+                .any(|(k, e)| *k == ProtocolKind::OpenAiChat
+                    && e.url == "https://api.deepseek.com/v1"),
+            "必须包含厂商预置里的 OpenAI 兼容端点"
+        );
+        let urls: Vec<&str> = candidates.iter().map(|(_, e)| e.url.as_str()).collect();
+        let mut deduped = urls.clone();
+        deduped.sort_unstable();
+        deduped.dedup();
+        assert_eq!(urls.len(), deduped.len(), "候选不得重复");
+    }
+
+    #[test]
+    fn missing_model_list_is_not_a_connection_failure() {
+        assert!(means_no_model_list(&ModelError::InvalidRequest(
+            ErrorDetail::new("404")
+        )));
+        assert!(means_no_model_list(&ModelError::Unsupported(
+            ErrorDetail::new("no /models")
+        )));
+        assert!(means_no_model_list(&ModelError::ProviderError {
+            status: Some(501),
+            detail: ErrorDetail::new("not implemented"),
+        }));
+        assert!(!means_no_model_list(&ModelError::AuthenticationFailed(
+            ErrorDetail::new("bad key")
+        )));
+        assert!(!means_no_model_list(&ModelError::NetworkError(
+            ErrorDetail::new("dns")
+        )));
+        assert!(!means_no_model_list(&ModelError::Timeout {
+            kind: umber_core::error::TimeoutKind::Connect,
+            detail: ErrorDetail::new("t"),
+        }));
     }
 }
