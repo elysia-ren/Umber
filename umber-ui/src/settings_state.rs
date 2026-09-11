@@ -872,9 +872,12 @@ mod tests {
     #[test]
     fn unsupported_protocol_is_ignored() {
         let mut state = SettingsState::new();
-        state.select_provider("anthropic");
-        state.set_protocol(ProtocolKind::OpenAiChat);
-        assert_eq!(state.protocol(), ProtocolKind::AnthropicMessages);
+        // Mistral 的预置只声明了 OpenAI 兼容（官方文档未记载 Responses /
+        // Anthropic 兼容面）：切到它没有的协议必须被忽略，而不是留一个并不
+        // 存在的端点当默认值。
+        state.select_provider("mistral");
+        state.set_protocol(ProtocolKind::AnthropicMessages);
+        assert_eq!(state.protocol(), ProtocolKind::OpenAiChat);
     }
 
     #[test]

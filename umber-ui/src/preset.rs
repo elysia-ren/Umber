@@ -838,7 +838,12 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.anthropic.com"),
         badge: "A",
         catalog_provider_ids: &["anthropic"],
-        offerings: &[ProviderOffering::anthropic("https://api.anthropic.com")],
+        offerings: &[
+            ProviderOffering::anthropic("https://api.anthropic.com"),
+            // 官方《OpenAI SDK compatibility》给的 base_url 是 https://api.anthropic.com/v1/
+            // （OpenAI 兼容层用 Bearer，原生 messages 用 x-api-key——两个头都发即可）
+            ProviderOffering::chat("https://api.anthropic.com/v1"),
+        ],
         plans: &[],
     },
     ProviderPreset {
@@ -850,9 +855,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://ai.google.dev/gemini-api/docs"),
         badge: "G",
         catalog_provider_ids: &["google"],
-        offerings: &[ProviderOffering::gemini(
-            "https://generativelanguage.googleapis.com",
-        )],
+        offerings: &[
+            ProviderOffering::gemini("https://generativelanguage.googleapis.com"),
+            // 官方《OpenAI compatibility》：base_url = .../v1beta/openai/
+            ProviderOffering::chat("https://generativelanguage.googleapis.com/v1beta/openai"),
+        ],
         plans: &[],
     },
     ProviderPreset {
@@ -864,7 +871,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.x.ai"),
         badge: "X",
         catalog_provider_ids: &["xai"],
-        offerings: &[ProviderOffering::chat("https://api.x.ai/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://api.x.ai/v1"),
+            // 官方《Inference API — Responses》：POST /v1/responses
+            ProviderOffering::responses("https://api.x.ai/v1"),
+        ],
         plans: &[],
     },
     ProviderPreset {
@@ -888,7 +899,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://console.groq.com/docs"),
         badge: "Q",
         catalog_provider_ids: &["groq"],
-        offerings: &[ProviderOffering::chat("https://api.groq.com/openai/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://api.groq.com/openai/v1"),
+            // 官方 API 参考《Responses (beta)》：POST /openai/v1/responses
+            ProviderOffering::responses("https://api.groq.com/openai/v1"),
+        ],
         plans: &[],
     },
     ProviderPreset {
@@ -900,7 +915,15 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.perplexity.ai"),
         badge: "P",
         catalog_provider_ids: &["perplexity"],
-        offerings: &[ProviderOffering::chat("https://api.perplexity.ai")],
+        offerings: &[
+            // 官方 Quickstart 现在的 OpenAI 兼容 base 是 Router：.../router/v1。
+            // 旧的 https://api.perplexity.ai + /chat/completions 仍能通（实测无鉴权
+            // 返回 401 而非 404），但已不在文档里；老账号可以自己改回这个端点。
+            ProviderOffering::chat("https://api.perplexity.ai/router/v1"),
+            ProviderOffering::responses("https://api.perplexity.ai/router/v1"),
+            // 官方《Create Messages》：POST /router/v1/messages（Anthropic 协议）
+            ProviderOffering::anthropic("https://api.perplexity.ai/router"),
+        ],
         plans: &[],
     },
     // ==================== 聚合与中转 ====================
