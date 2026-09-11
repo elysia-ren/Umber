@@ -739,7 +739,9 @@ mod tests {
     fn switching_protocol_brings_out_that_protocols_endpoint() {
         let mut state = SettingsState::new();
         state.select_provider("deepseek");
-        assert_eq!(state.endpoint(), "https://api.deepseek.com/v1");
+        assert_eq!(state.endpoint(), "https://api.deepseek.com");
+        state.set_protocol(ProtocolKind::OpenAiResponses);
+        assert_eq!(state.endpoint(), "https://api.deepseek.com");
         state.set_protocol(ProtocolKind::AnthropicMessages);
         assert_eq!(state.endpoint(), "https://api.deepseek.com/anthropic");
     }

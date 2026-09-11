@@ -137,7 +137,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "D",
         catalog_provider_ids: &["deepseek"],
         offerings: &[
-            ProviderOffering::chat("https://api.deepseek.com/v1"),
+            // 官方 base_url 表给的基准是 https://api.deepseek.com（无 /v1）。
+            // /v1 是可用别名，实测两者都通；这里跟官方文档保持一致。
+            ProviderOffering::chat("https://api.deepseek.com"),
+            // 官方 Responses API（实测 POST /responses -> 200）
+            ProviderOffering::responses("https://api.deepseek.com"),
             ProviderOffering::anthropic("https://api.deepseek.com/anthropic"),
         ],
     },
@@ -182,6 +186,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         catalog_provider_ids: &["moonshotai", "moonshotai-cn"],
         offerings: &[
             ProviderOffering::chat("https://api.moonshot.cn/v1"),
+            ProviderOffering::responses("https://api.moonshot.cn/v1"),
             // 官方文档：Anthropic 兼容 base 为 https://api.moonshot.cn/anthropic
             ProviderOffering::anthropic("https://api.moonshot.cn/anthropic"),
         ],
@@ -195,9 +200,12 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://www.volcengine.com/docs/82379"),
         badge: "火",
         catalog_provider_ids: &["volcengine"],
-        offerings: &[ProviderOffering::chat(
-            "https://ark.cn-beijing.volces.com/api/v3",
-        )],
+        offerings: &[
+            ProviderOffering::chat("https://ark.cn-beijing.volces.com/api/v3"),
+            ProviderOffering::responses("https://ark.cn-beijing.volces.com/api/v3"),
+            // 官方 Messages（Anthropic 兼容）端点，非 Coding Plan 专属
+            ProviderOffering::anthropic("https://ark.cn-beijing.volces.com/api/compatible"),
+        ],
     },
     ProviderPreset {
         id: "minimax",
@@ -208,7 +216,13 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://platform.minimaxi.com/document"),
         badge: "mm",
         catalog_provider_ids: &["minimax", "minimax-cn"],
-        offerings: &[ProviderOffering::chat("https://api.minimax.chat/v1")],
+        offerings: &[
+            // 国内站：api.minimax.chat 已过期，官方文档现行域名为 api.minimax.cn
+            // （国际站为 api.minimax.io，见 docs 的国内/国际两套）
+            ProviderOffering::chat("https://api.minimax.cn/v1"),
+            ProviderOffering::responses("https://api.minimax.cn/v1"),
+            ProviderOffering::anthropic("https://api.minimax.cn/anthropic"),
+        ],
     },
     ProviderPreset {
         id: "stepfun",
@@ -219,7 +233,12 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://platform.stepfun.com/docs"),
         badge: "阶",
         catalog_provider_ids: &["stepfun", "stepfun-ai"],
-        offerings: &[ProviderOffering::chat("https://api.stepfun.com/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://api.stepfun.com/v1"),
+            ProviderOffering::responses("https://api.stepfun.com/v1"),
+            // Anthropic 兼容的 base 就是裸 host（官方完整路径 /v1/messages）
+            ProviderOffering::anthropic("https://api.stepfun.com"),
+        ],
     },
     ProviderPreset {
         id: "sensenova",
@@ -231,7 +250,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "商",
         catalog_provider_ids: &["sensenova"],
         offerings: &[ProviderOffering::chat(
-            "https://api.sensenova.cn/compatible-mode/v1",
+            "https://api.sensenova.cn/compatible-mode/v2",
         )],
     },
     ProviderPreset {
@@ -259,7 +278,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "百",
         // 上游目录暂无 baidu 条目：界面会显示"目录无该厂商数据，请刷新模型列表"
         catalog_provider_ids: &["baidu", "qianfan"],
-        offerings: &[ProviderOffering::chat("https://qianfan.baidubce.com/v2")],
+        offerings: &[
+            ProviderOffering::chat("https://qianfan.baidubce.com/v2"),
+            ProviderOffering::responses("https://qianfan.baidubce.com/v2"),
+            ProviderOffering::anthropic("https://qianfan.baidubce.com/anthropic"),
+        ],
     },
     ProviderPreset {
         id: "hunyuan",
@@ -270,9 +293,10 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://cloud.tencent.com/document/product/1729"),
         badge: "腾",
         catalog_provider_ids: &["tencent", "hunyuan"],
-        offerings: &[ProviderOffering::chat(
-            "https://api.hunyuan.cloud.tencent.com/v1",
-        )],
+        offerings: &[
+            ProviderOffering::chat("https://api.hunyuan.cloud.tencent.com/v1"),
+            ProviderOffering::anthropic("https://api.hunyuan.cloud.tencent.com/anthropic"),
+        ],
     },
     // ==================== 海外官方 ====================
     ProviderPreset {
@@ -652,6 +676,40 @@ mod tests {
         }
     }
 
+    /// 一个厂商的 offerings 里**同一协议只能出现一次**：协议下拉与
+    /// "切换协议自动带出端点"都按协议查找，重复会导致带出哪个端点不确定。
+    #[test]
+    fn a_preset_never_declares_the_same_protocol_twice() {
+        for preset in BUILTIN_PRESETS {
+            let mut seen: Vec<ProtocolKind> = Vec::new();
+            for offering in preset.offerings {
+                assert!(
+                    !seen.contains(&offering.protocol),
+                    "{} 重复声明了协议 {:?}",
+                    preset.id,
+                    offering.protocol
+                );
+                seen.push(offering.protocol);
+            }
+        }
+    }
+
+    /// 端点用于拼接动作路径（如 base + `/chat/completions`），
+    /// 统一不带结尾斜杠，避免出现 `//chat/completions` 这类地址。
+    #[test]
+    fn preset_endpoints_have_no_trailing_slash() {
+        for preset in BUILTIN_PRESETS {
+            for offering in preset.offerings {
+                assert!(
+                    !offering.default_endpoint.ends_with('/'),
+                    "{} 的端点不应带结尾斜杠: {}",
+                    preset.id,
+                    offering.default_endpoint
+                );
+            }
+        }
+    }
+
     #[test]
     fn official_endpoints_use_https_and_locals_use_http() {
         for preset in BUILTIN_PRESETS {
@@ -705,7 +763,7 @@ mod tests {
         let chat = deepseek.offering(ProtocolKind::OpenAiChat).unwrap();
         let anthropic = deepseek.offering(ProtocolKind::AnthropicMessages).unwrap();
         assert_ne!(chat.default_endpoint, anthropic.default_endpoint);
-        assert_eq!(chat.default_endpoint, "https://api.deepseek.com/v1");
+        assert_eq!(chat.default_endpoint, "https://api.deepseek.com");
         assert_eq!(
             anthropic.default_endpoint,
             "https://api.deepseek.com/anthropic"
