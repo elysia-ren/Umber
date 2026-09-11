@@ -150,6 +150,8 @@ pub const BUILTIN_STRINGS_ZH: &[(&str, &str)] = &[
     ("plan.mimo.token_plan_sgp", "Token Plan（新加坡集群）"),
     ("plan.mimo.token_plan_ams", "Token Plan（欧洲集群）"),
     ("plan.dashscope.token_plan", "百炼 Token Plan"),
+    ("plan.tokenhub.coding", "TokenHub Coding Plan"),
+    ("plan.tokenhub.token_plan", "TokenHub Token Plan"),
     // 校验
     ("validation.required", "此项必填"),
     ("validation.pattern", "格式不正确"),
@@ -214,6 +216,7 @@ pub const BUILTIN_STRINGS_ZH: &[(&str, &str)] = &[
     ("provider.hunyuan", "腾讯混元"),
     ("provider.xiaomi", "小米 MiMo"),
     ("provider.longcat", "美团 LongCat"),
+    ("provider.tokenhub", "腾讯云 TokenHub"),
     ("provider.minimax", "MiniMax"),
     ("provider.stepfun", "阶跃星辰 StepFun"),
     ("provider.sensenova", "商汤日日新"),
@@ -328,6 +331,8 @@ pub const BUILTIN_STRINGS_EN: &[(&str, &str)] = &[
     ("plan.mimo.token_plan_sgp", "Token Plan (Singapore cluster)"),
     ("plan.mimo.token_plan_ams", "Token Plan (Europe cluster)"),
     ("plan.dashscope.token_plan", "Model Studio Token Plan"),
+    ("plan.tokenhub.coding", "TokenHub Coding Plan"),
+    ("plan.tokenhub.token_plan", "TokenHub Token Plan"),
     ("validation.required", "This field is required"),
     ("validation.pattern", "Invalid format"),
     (
@@ -389,6 +394,7 @@ pub const BUILTIN_STRINGS_EN: &[(&str, &str)] = &[
     ("provider.hunyuan", "Tencent Hunyuan"),
     ("provider.xiaomi", "Xiaomi MiMo"),
     ("provider.longcat", "Meituan LongCat"),
+    ("provider.tokenhub", "Tencent Cloud TokenHub"),
     ("provider.minimax", "MiniMax"),
     ("provider.stepfun", "StepFun"),
     ("provider.sensenova", "SenseNova"),

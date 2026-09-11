@@ -328,6 +328,37 @@ const MIMO_TOKEN_PLAN: &[ProviderPlan] = &[
     },
 ];
 
+/// 腾讯云 TokenHub 的两种订阅制计费方式。
+///
+/// TokenHub 与「腾讯混元大模型」（api.hunyuan.cloud.tencent.com）是**两个产品**：
+/// 混元是模型本身，TokenHub 是腾讯云的大模型服务平台（同一个平台上还卖 DeepSeek、
+/// GLM 等家外模型），所以它是独立预置而不是混元的套餐。
+///
+/// 官方 Coding Plan 文档逐字写着：订阅专属的 API Key 和 Base URL 与腾讯云预付费/
+/// 后付费的 API Key（sk-xxxx）和 Base URL「不互通，请勿混用」——正是「计费方式」。
+/// Token Plan 另有 `tokenhub.tencentmaas.com/plan/…` 的写法（官方的工具接入页），
+/// 本预置采用套餐总览页给出的 `api.lkeap.cloud.tencent.com/plan/…`。
+const TOKENHUB_PLANS: &[ProviderPlan] = &[
+    ProviderPlan {
+        id: "coding",
+        name_key: "plan.tokenhub.coding",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://api.lkeap.cloud.tencent.com/coding/v3"),
+            ProviderOffering::anthropic("https://api.lkeap.cloud.tencent.com/coding/anthropic"),
+        ],
+    },
+    ProviderPlan {
+        id: "token_plan",
+        name_key: "plan.tokenhub.token_plan",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://api.lkeap.cloud.tencent.com/plan/v3"),
+            ProviderOffering::anthropic("https://api.lkeap.cloud.tencent.com/plan/anthropic"),
+        ],
+    },
+];
+
 /// 内置厂商预置。**国内厂商在前**，各组内按常见程度排序。
 pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
     // ==================== 国内厂商 ====================
@@ -429,7 +460,15 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         key_url: Some("https://platform.minimaxi.com/user-center/basic-information/interface-key"),
         doc_url: Some("https://platform.minimaxi.com/document"),
         badge: "mm",
-        catalog_provider_ids: &["minimax", "minimax-cn"],
+        catalog_provider_ids: &[
+            "minimax",
+            "minimax-cn",
+            "minimax-coding-plan",
+            "minimax-cn-coding-plan",
+        ],
+        // MiniMax 的 Token Plan（原 Coding Plan）**没有独立端点**：官方文档里订阅与
+        // 按量用的是同一个 base URL，区分物是 Subscription Key。因此这里不设「计费
+        // 方式」，用户订阅后直接把 Key 换成订阅 Key 即可。
         offerings: &[
             // 国内站：api.minimax.chat 已过期，官方文档现行域名为 api.minimax.cn
             // （国际站为 api.minimax.io，见 docs 的国内/国际两套）
@@ -564,6 +603,30 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::anthropic("https://api.longcat.chat/anthropic"),
         ],
         plans: &[],
+    },
+    ProviderPreset {
+        id: "tokenhub",
+        name_key: "provider.tokenhub",
+        category: ProviderCategory::China,
+        keyless: false,
+        // 官方按量文档「鉴权方式」页：API KEY 在控制台获取（该页同时给出接口域名表）
+        key_url: Some("https://cloud.tencent.com/document/product/1823/130078"),
+        doc_url: Some("https://cloud.tencent.com/document/product/1823"),
+        badge: "TH",
+        catalog_provider_ids: &[
+            "tencent-tokenhub",
+            "tencent-coding-plan",
+            "tencent-token-plan",
+        ],
+        offerings: &[
+            // 官方《API 使用说明》：广州 https://tokenhub.tencentmaas.com（新加坡为 -intl）
+            ProviderOffering::chat("https://tokenhub.tencentmaas.com/v1"),
+            ProviderOffering::responses("https://tokenhub.tencentmaas.com/v1"),
+            // Anthropic 协议的调用路径是 `${BASE_URL}/v1/messages`（官方《Anthropic
+            // Message Protocol》字段说明），BASE_URL 为裸域名——所以这里不带 /v1。
+            ProviderOffering::anthropic("https://tokenhub.tencentmaas.com"),
+        ],
+        plans: TOKENHUB_PLANS,
     },
     // ==================== 海外官方 ====================
     ProviderPreset {

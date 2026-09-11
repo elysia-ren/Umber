@@ -228,7 +228,7 @@ with Runtime() as rt:                       # checks the ABI major version
 data contract: schema-driven forms, light and dark tokens, CJK font fallback
 loaded from the system, and headless frame tests. It reaches the network, the
 disk and the keychain exclusively through the host-supplied `SettingsBackend`,
-so replacing it never touches the contract. Its built-in catalogue covers 31
+so replacing it never touches the contract. Its built-in catalogue covers 32
 vendors across the four protocols, and each vendor exposes its billing plans
 (pay-as-you-go vs. a subscription / coding plan) as endpoints of the same
 deployment - switching plans never creates a second vendor entry.
