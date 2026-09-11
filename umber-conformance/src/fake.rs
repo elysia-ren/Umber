@@ -17,6 +17,7 @@ use umber_engine::{ProviderStream, SourceFactory};
 pub enum Step {
     Emit(ModelEvent),
     /// 睡眠；若会超过 deadline，则睡到 deadline 并返回 Timeout（供 Engine 重标）。
+    /// 被截断时**剩余时长会被保留**，下次拉取接着睡——截断不等于消费掉整段延迟。
     Delay(Duration),
     /// 传输 / 协议层失败。
     Fail(ModelError),
@@ -39,6 +40,7 @@ impl Script {
     pub fn into_stream(self) -> ScriptedStream {
         ScriptedStream {
             steps: self.steps.into_iter(),
+            pending_delay: None,
         }
     }
 }
@@ -74,41 +76,52 @@ impl ScriptBuilder {
 
 pub struct ScriptedStream {
     steps: std::vec::IntoIter<Step>,
+    /// 被 deadline 截断后**尚未睡满**的剩余延迟。
+    ///
+    /// 必须保留：截断不能吞掉延迟，否则下一次拉取会直接跳过整段等待。
+    /// 曾因此让 `cancellation_mid_stream_interrupts_wait` 在负载高的 CI runner
+    /// 上偶发失败——引擎先拿到"跳过延迟后的 completed"，终结事件就成了 Completed。
+    pending_delay: Option<Duration>,
 }
 
 impl ProviderStream for ScriptedStream {
     fn next_event(&mut self, deadline: Instant) -> Result<Option<ModelEvent>, ModelError> {
         loop {
-            match self.steps.next() {
-                None => return Ok(None), // 未显式 eof 也视为正常 EOF
-                Some(Step::Emit(e)) => return Ok(Some(e)),
-                Some(Step::Eof) => return Ok(None),
-                Some(Step::Fail(e)) => return Err(e),
-                Some(Step::Delay(d)) => {
-                    if !sleep_respecting_deadline(d, deadline) {
-                        return Err(ModelError::Timeout {
-                            kind: TimeoutKind::Idle,
-                            detail: ErrorDetail::new("scripted delay exceeded deadline"),
-                        });
-                    }
-                }
+            // 上次被截断的剩余延迟优先；它不再属于 steps，不会被重复消费。
+            let delay = match self.pending_delay.take() {
+                Some(rest) => rest,
+                None => match self.steps.next() {
+                    None => return Ok(None), // 未显式 eof 也视为正常 EOF
+                    Some(Step::Emit(e)) => return Ok(Some(e)),
+                    Some(Step::Eof) => return Ok(None),
+                    Some(Step::Fail(e)) => return Err(e),
+                    Some(Step::Delay(d)) => d,
+                },
+            };
+            if let Some(rest) = sleep_respecting_deadline(delay, deadline) {
+                self.pending_delay = Some(rest);
+                return Err(ModelError::Timeout {
+                    kind: TimeoutKind::Idle,
+                    detail: ErrorDetail::new("scripted delay exceeded deadline"),
+                });
             }
         }
     }
 }
 
-/// 睡满 `d` 返回 true；deadline 先到则睡到 deadline 返回 false。
-fn sleep_respecting_deadline(d: Duration, deadline: Instant) -> bool {
-    let until = Instant::now() + d;
+/// 睡满 `d` 返回 `None`；deadline 先到则睡到 deadline 并返回**剩余**时长。
+fn sleep_respecting_deadline(d: Duration, deadline: Instant) -> Option<Duration> {
+    let now = Instant::now();
+    let until = now + d;
     if until <= deadline {
         thread::sleep(d);
-        true
+        None
     } else {
-        let now = Instant::now();
-        if deadline > now {
-            thread::sleep(deadline - now);
+        let slept = deadline.saturating_duration_since(now);
+        if !slept.is_zero() {
+            thread::sleep(slept);
         }
-        false
+        Some(d.saturating_sub(slept))
     }
 }
 
@@ -149,6 +162,7 @@ impl SourceFactory for ScriptedFactory {
         drop(failures);
         Ok(Box::new(ScriptedStream {
             steps: self.script.steps.clone().into_iter(),
+            pending_delay: None,
         }))
     }
 }
@@ -169,6 +183,32 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(1);
         assert!(s.next_event(deadline).unwrap().is_some());
         assert!(s.next_event(deadline).unwrap().is_none());
+    }
+
+    /// 回归：被 deadline 截断不得吞掉延迟。
+    ///
+    /// 否则下一次拉取会跳过整段等待直接吐出后续事件——这正是
+    /// `cancellation_mid_stream_interrupts_wait` 在负载高的 runner 上偶发失败的原因。
+    #[test]
+    fn truncated_delay_is_not_swallowed() {
+        let mut s = Script::builder()
+            .delay(Duration::from_millis(300))
+            .emit(ModelEvent::TextStarted {
+                block_id: BlockId::from("b"),
+            })
+            .build()
+            .into_stream();
+
+        let short = || Instant::now() + Duration::from_millis(20);
+        assert!(s.next_event(short()).is_err(), "第一次应被截断并报超时");
+        assert!(
+            s.next_event(short()).is_err(),
+            "剩余延迟必须继续生效，而不是被跳过"
+        );
+
+        // 睡满剩余延迟之后才允许吐出事件
+        let long = Instant::now() + Duration::from_secs(2);
+        assert!(s.next_event(long).unwrap().is_some());
     }
 
     #[test]
