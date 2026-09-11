@@ -448,6 +448,43 @@ impl SettingsApp {
                 }
             }
         });
+        // 计费方式（按量 / 订阅套餐）。只有该厂商存在订阅套餐时才出现——
+        // 订阅端点与按量端点**不可混用**（官方明确警告），所以它是一个显式的
+        // 切换，而不是混进协议下拉里。切换会连协议与端点一起换。
+        let plans = self.state.available_plans();
+        if plans.len() > 1 {
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label(self.text("settings.provider.plan"));
+                let current = self.state.plan_index();
+                let mut picked: Option<usize> = None;
+                egui::ComboBox::from_id_salt("umer-plan")
+                    .selected_text(self.text(self.state.preset().plan_name_key(current)))
+                    .width(180.0)
+                    .show_ui(ui, |ui| {
+                        for (index, name_key, subscription) in &plans {
+                            let mut label = self.text(name_key);
+                            if *subscription {
+                                label.push_str(&self.text("plan.suffix"));
+                            }
+                            if ui.selectable_label(*index == current, label).clicked() {
+                                picked = Some(*index);
+                            }
+                        }
+                    });
+                if let Some(index) = picked {
+                    self.state.set_plan(index);
+                    self.request_preview = None;
+                }
+                if self.state.plan_is_subscription() {
+                    ui.label(
+                        RichText::new(self.text("plan.subscription_hint"))
+                            .small()
+                            .color(colors.accent),
+                    );
+                }
+            });
+        }
 
         // API Key
         ui.add_space(8.0);
@@ -916,7 +953,7 @@ impl SettingsApp {
         let key = self
             .state
             .preset()
-            .offering(protocol)
+            .offering_in(self.state.plan_index(), protocol)
             .map(|o| o.protocol_label_key)
             .unwrap_or("protocol_label.openai_chat");
         self.text(key)

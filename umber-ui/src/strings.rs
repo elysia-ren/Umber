@@ -135,6 +135,17 @@ pub const BUILTIN_STRINGS_ZH: &[(&str, &str)] = &[
     ("protocol_label.openai_responses", "OpenAI Responses"),
     ("protocol_label.anthropic_messages", "Anthropic 兼容"),
     ("protocol_label.gemini", "Google Gemini"),
+    // 计费方式（按量 / 订阅套餐）。订阅端点与按量端点不可混用，界面要显式区分。
+    ("settings.provider.plan", "计费方式"),
+    ("plan.payg", "按量计费"),
+    ("plan.suffix", "（需订阅）"),
+    ("plan.subscription_hint", "该计费方式需要对应订阅，端点与按量不可混用"),
+    ("plan.zhipu.coding", "GLM 编码套餐"),
+    ("plan.zai.coding", "GLM Coding Plan"),
+    ("plan.ark.coding", "方舟 Coding Plan"),
+    ("plan.stepfun.plan", "Step Plan"),
+    ("plan.moonshot.kimi_code", "Kimi Code 会员"),
+    ("plan.dashscope.coding", "百炼 Coding Plan"),
     // 校验
     ("validation.required", "此项必填"),
     ("validation.pattern", "格式不正确"),
@@ -294,6 +305,19 @@ pub const BUILTIN_STRINGS_EN: &[(&str, &str)] = &[
     ("protocol_label.openai_responses", "OpenAI Responses"),
     ("protocol_label.anthropic_messages", "Anthropic compatible"),
     ("protocol_label.gemini", "Google Gemini"),
+    ("settings.provider.plan", "Billing"),
+    ("plan.payg", "Pay-as-you-go"),
+    ("plan.suffix", " (subscription)"),
+    (
+        "plan.subscription_hint",
+        "Requires the matching subscription; its endpoints cannot be mixed with pay-as-you-go",
+    ),
+    ("plan.zhipu.coding", "GLM Coding Plan"),
+    ("plan.zai.coding", "GLM Coding Plan"),
+    ("plan.ark.coding", "Ark Coding Plan"),
+    ("plan.stepfun.plan", "Step Plan"),
+    ("plan.moonshot.kimi_code", "Kimi Code membership"),
+    ("plan.dashscope.coding", "Model Studio Coding Plan"),
     ("validation.required", "This field is required"),
     ("validation.pattern", "Invalid format"),
     (
@@ -507,6 +531,13 @@ mod tests {
             keys.push(preset.subtitle_key());
             for offering in preset.offerings {
                 keys.push(offering.protocol_label_key);
+            }
+            // 订阅套餐：名称 key + 套餐内各协议的面向用户名称
+            for plan in preset.plans {
+                keys.push(plan.name_key);
+                for offering in plan.offerings {
+                    keys.push(offering.protocol_label_key);
+                }
             }
         }
 

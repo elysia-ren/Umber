@@ -78,6 +78,38 @@ fn renders_many_frames_headless() {
     }
 }
 
+/// 计费方式选择器的渲染路径：有订阅套餐的厂商必须能渲染，且切换后端点整体换掉。
+#[test]
+fn renders_the_billing_plan_selector_headless() {
+    let ctx = egui::Context::default();
+    let mut app = SettingsApp::new(
+        SettingsPage::provider_settings(),
+        umber_ui::Strings::builtin("zh-CN").unwrap(),
+        Arc::new(support::RecordingBackend::new()),
+    );
+    app.install_system_fonts(&ctx);
+
+    // 智谱有订阅套餐（Coding Plan）
+    app.state_mut().select_provider("zhipu");
+    assert_eq!(app.state_mut().available_plans().len(), 2);
+    app.state_mut().set_plan(1);
+    for _ in 0..3 {
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.ui(ctx));
+    }
+    assert_eq!(
+        app.state_mut().endpoint(),
+        "https://open.bigmodel.cn/api/coding/paas/v4",
+        "切到订阅套餐后端点必须整体换掉"
+    );
+
+    // 没有订阅套餐的厂商不会走那个分支
+    app.state_mut().select_provider("deepseek");
+    assert_eq!(app.state_mut().available_plans().len(), 1);
+    for _ in 0..2 {
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.ui(ctx));
+    }
+}
+
 #[test]
 fn drafts_are_seeded_with_schema_defaults() {
     // 从 schema 默认值播种：medium 档位 / 主动探测关闭（§17.2 §21.1）

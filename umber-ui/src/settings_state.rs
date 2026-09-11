@@ -170,6 +170,9 @@ pub struct SettingsState {
     pub search: String,
     selected_provider: String,
     protocol: ProtocolKind,
+    /// 计费方式索引：0 = 按量（默认），>=1 = `preset.plans[index - 1]`。
+    /// 切换厂商时重置为 0——**不会**自动落到订阅套餐上。
+    plan: usize,
     endpoint: String,
     api_key: String,
     /// 用户手工改过地址后，Preset 不再覆盖（§34）。
@@ -199,6 +202,7 @@ impl SettingsState {
             search: String::new(),
             selected_provider: String::new(),
             protocol: ProtocolKind::OpenAiChat,
+            plan: 0,
             endpoint: String::new(),
             api_key: String::new(),
             endpoint_touched: false,
@@ -265,6 +269,8 @@ impl SettingsState {
             return;
         };
         self.selected_provider = preset.id.to_string();
+        // 换厂商一律回到按量：订阅套餐必须由用户显式选择
+        self.plan = 0;
         let first = &preset.offerings[0];
         self.protocol = first.protocol;
         self.endpoint = first.default_endpoint.to_string();
@@ -334,7 +340,7 @@ impl SettingsState {
     }
 
     pub fn set_protocol(&mut self, protocol: ProtocolKind) {
-        let Some(offering) = self.preset().offering(protocol) else {
+        let Some(offering) = self.preset().offering_in(self.plan, protocol) else {
             return; // 该厂商不支持此协议：忽略，不产生非法组合
         };
         self.protocol = protocol;
@@ -345,8 +351,60 @@ impl SettingsState {
         let _ = offering;
     }
 
+    /// 当前计费方式下可选的协议。
+    ///
+    /// **套餐决定可选协议**：例如百炼的 Coding 套餐只给 Anthropic 面，
+    /// 切到该套餐后协议下拉里就不该再出现 OpenAI 面。
     pub fn available_protocols(&self) -> Vec<ProtocolKind> {
-        self.preset().offerings.iter().map(|o| o.protocol).collect()
+        self.preset()
+            .plan_offerings(self.plan)
+            .iter()
+            .map(|o| o.protocol)
+            .collect()
+    }
+
+    /// 当前计费方式索引（0 = 按量）。
+    pub fn plan_index(&self) -> usize {
+        self.plan
+    }
+
+    /// 该厂商的全部计费方式：(索引, 名称 key, 是否订阅制)。
+    pub fn available_plans(&self) -> Vec<(usize, &'static str, bool)> {
+        let preset = self.preset();
+        (0..preset.plan_count())
+            .map(|i| (i, preset.plan_name_key(i), preset.plan_is_subscription(i)))
+            .collect()
+    }
+
+    /// 当前计费方式是否为订阅制（界面据此提示「需订阅」）。
+    pub fn plan_is_subscription(&self) -> bool {
+        self.preset().plan_is_subscription(self.plan)
+    }
+
+    /// 切换计费方式。
+    ///
+    /// 切换后**一律换成该计费方式的端点**——这正是这个开关存在的意义（§34 的
+    /// "端点可覆盖"说的是用户手工覆盖，不是套餐混用）。若当前协议在新计费方式里
+    /// 不存在，则回退到它的首个协议；模型列表清空，因为套餐能用的模型不同。
+    pub fn set_plan(&mut self, plan: usize) {
+        let preset = self.preset();
+        if plan >= preset.plan_count() {
+            return;
+        }
+        self.plan = plan;
+        let offerings = preset.plan_offerings(plan);
+        let chosen = offerings
+            .iter()
+            .find(|o| o.protocol == self.protocol)
+            .or_else(|| offerings.first());
+        if let Some(offering) = chosen {
+            self.protocol = offering.protocol;
+            self.endpoint = offering.default_endpoint.to_string();
+        }
+        self.endpoint_touched = false;
+        self.models.clear();
+        self.selected_model = None;
+        self.discovered_count = 0;
     }
 
     pub fn endpoint(&self) -> &str {
@@ -359,7 +417,7 @@ impl SettingsState {
     }
 
     pub fn reset_endpoint(&mut self) {
-        if let Some(offering) = self.preset().offering(self.protocol) {
+        if let Some(offering) = self.preset().offering_in(self.plan, self.protocol) {
             self.endpoint = offering.default_endpoint.to_string();
             self.endpoint_touched = false;
         }
@@ -367,7 +425,7 @@ impl SettingsState {
 
     pub fn endpoint_is_default(&self) -> bool {
         self.preset()
-            .offering(self.protocol)
+            .offering_in(self.plan, self.protocol)
             .map(|o| o.default_endpoint == self.endpoint)
             .unwrap_or(false)
     }
@@ -733,6 +791,59 @@ mod tests {
             assert_eq!(state.endpoint(), preset.offerings[0].default_endpoint);
             assert!(state.endpoint_is_default());
         }
+    }
+
+    #[test]
+    fn switching_billing_plan_swaps_endpoints_and_protocols() {
+        let mut state = SettingsState::new();
+        state.select_provider("zhipu");
+        assert_eq!(state.plan_index(), 0);
+        assert!(!state.plan_is_subscription());
+        assert_eq!(state.endpoint(), "https://open.bigmodel.cn/api/paas/v4");
+        assert_eq!(state.available_plans().len(), 2);
+
+        state.set_plan(1);
+        assert_eq!(state.plan_index(), 1);
+        assert!(state.plan_is_subscription());
+        // 端点必须**整体换成套餐端点**——这正是这个开关存在的意义
+        assert_eq!(
+            state.endpoint(),
+            "https://open.bigmodel.cn/api/coding/paas/v4"
+        );
+        // 可选协议也随套餐变化
+        assert!(state
+            .available_protocols()
+            .contains(&ProtocolKind::OpenAiResponses));
+
+        state.set_plan(0);
+        assert_eq!(state.endpoint(), "https://open.bigmodel.cn/api/paas/v4");
+        assert!(!state.plan_is_subscription());
+    }
+
+    /// 套餐里没有当前协议时必须回退，不能停在"协议 + 端点"不匹配的非法组合上。
+    #[test]
+    fn switching_to_a_plan_without_the_current_protocol_falls_back() {
+        let mut state = SettingsState::new();
+        state.select_provider("moonshot");
+        assert_eq!(state.protocol(), ProtocolKind::OpenAiChat);
+        // Kimi Code 会员只提供 Anthropic 面
+        state.set_plan(1);
+        assert_eq!(state.protocol(), ProtocolKind::AnthropicMessages);
+        assert_eq!(state.endpoint(), "https://api.kimi.com/coding");
+    }
+
+    /// 换厂商必须回到按量：订阅套餐**不能被自动选中**（否则用户会在不知情下用到
+    /// 订阅端点，甚至产生额外费用）。
+    #[test]
+    fn selecting_a_vendor_resets_the_billing_plan() {
+        let mut state = SettingsState::new();
+        state.select_provider("zhipu");
+        state.set_plan(1);
+        state.select_provider("deepseek");
+        assert_eq!(state.plan_index(), 0);
+        assert!(!state.plan_is_subscription());
+        // 没有订阅套餐的厂商只有一种计费方式
+        assert_eq!(state.available_plans().len(), 1);
     }
 
     #[test]

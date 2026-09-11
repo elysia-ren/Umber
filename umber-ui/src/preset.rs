@@ -102,8 +102,36 @@ pub struct ProviderPreset {
     /// （实测来自上游目录的 provider 标识，如 `zhipuai` / `moonshotai`）。
     /// 用于"推荐模型"——**不是硬编码模型名，而是按厂商查目录**。
     pub catalog_provider_ids: &'static [&'static str],
+    /// **默认计费方式（按量）**的协议端点。
+    pub offerings: &'static [ProviderOffering],
+    /// 订阅制计费方式（Coding Plan / Token Plan 等）。
+    ///
+    /// 为什么单独一层、而不是在厂商列表里再复制一家「智谱 · 编码套餐」：
+    /// - 这些端点是**订阅专属**，与按量端点**不可混用**（官方明确警告，混用会失败
+    ///   或产生额外费用）；
+    /// - 同一家厂商的订阅套餐与按量套餐，支持的协议 / 模型往往不同；
+    /// - 放在厂商内的「计费方式」里切换，用户不会在列表里选错同名的第二家。
+    ///
+    /// 空数组 = 该厂商只有按量一种计费方式。
+    pub plans: &'static [ProviderPlan],
+}
+
+/// 一种**订阅制**计费方式及其端点。
+///
+/// 默认（按量）计费方式不是 ProviderPlan——它就是 ProviderPreset::offerings，
+/// 索引 0 永远留给它，这样既有代码路径无需区分「有没有套餐」。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderPlan {
+    pub id: &'static str,
+    /// 计费方式名称的 i18n key。
+    pub name_key: &'static str,
+    /// 订阅制：界面需要提示「需订阅」，并且**不会**在选中厂商时被自动选中。
+    pub subscription: bool,
     pub offerings: &'static [ProviderOffering],
 }
+
+/// 计费方式索引 0（按量）的名称 key；所有厂商共用。
+pub const PLAN_PAYG_NAME_KEY: &str = "plan.payg";
 
 impl ProviderPreset {
     pub fn default_protocol(&self) -> ProtocolKind {
@@ -112,6 +140,52 @@ impl ProviderPreset {
 
     pub fn offering(&self, protocol: ProtocolKind) -> Option<&ProviderOffering> {
         self.offerings.iter().find(|o| o.protocol == protocol)
+    }
+
+    /// 全部计费方式数量（含默认的按量）。
+    pub fn plan_count(&self) -> usize {
+        1 + self.plans.len()
+    }
+
+    /// 指定计费方式的端点集合。索引 0 = 按量；越界退回按量。
+    pub fn plan_offerings(&self, plan: usize) -> &'static [ProviderOffering] {
+        if plan == 0 {
+            self.offerings
+        } else {
+            self.plans
+                .get(plan - 1)
+                .map(|p| p.offerings)
+                .unwrap_or(self.offerings)
+        }
+    }
+
+    /// 指定计费方式下某协议的端点。
+    pub fn offering_in(&self, plan: usize, protocol: ProtocolKind) -> Option<&ProviderOffering> {
+        self.plan_offerings(plan)
+            .iter()
+            .find(|o| o.protocol == protocol)
+    }
+
+    /// 指定计费方式的名称 key。
+    pub fn plan_name_key(&self, plan: usize) -> &'static str {
+        match plan {
+            0 => PLAN_PAYG_NAME_KEY,
+            i => self
+                .plans
+                .get(i - 1)
+                .map(|p| p.name_key)
+                .unwrap_or(PLAN_PAYG_NAME_KEY),
+        }
+    }
+
+    /// 指定计费方式是否为订阅制。
+    pub fn plan_is_subscription(&self, plan: usize) -> bool {
+        plan > 0
+            && self
+                .plans
+                .get(plan - 1)
+                .map(|p| p.subscription)
+                .unwrap_or(false)
     }
 
     pub fn subtitle_key(&self) -> &'static str {
@@ -124,6 +198,79 @@ impl ProviderPreset {
     }
 }
 
+// ==================== 订阅制套餐端点 ====================
+//
+// 这些端点**只有订阅对应套餐才能用**，且与按量端点**不可混用**（官方明确警告，
+// 混用会失败或产生额外费用）。因此它们不混进厂商的默认 offerings，而是作为
+// 厂商设置里的「计费方式」由用户显式切换。
+
+/// 智谱 GLM 编码套餐（Coding Plan）。
+const ZHIPU_CODING: &[ProviderPlan] = &[ProviderPlan {
+    id: "coding",
+    name_key: "plan.zhipu.coding",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://open.bigmodel.cn/api/coding/paas/v4"),
+        ProviderOffering::responses("https://open.bigmodel.cn/api/v1"),
+        // Anthropic 面与按量同址（官方 Coding Plan 文档也指向该 base）
+        ProviderOffering::anthropic("https://open.bigmodel.cn/api/anthropic"),
+    ],
+}];
+
+/// 智谱国际站（Z.ai）GLM Coding Plan。
+const ZAI_CODING: &[ProviderPlan] = &[ProviderPlan {
+    id: "coding",
+    name_key: "plan.zai.coding",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://api.z.ai/api/coding/paas/v4"),
+        ProviderOffering::responses("https://api.z.ai/api/v1"),
+        ProviderOffering::anthropic("https://api.z.ai/api/anthropic"),
+    ],
+}];
+
+/// 火山方舟 Coding Plan。官方特别提示：该套餐下不能用 /api/v3（会产生额外费用）。
+const ARK_CODING: &[ProviderPlan] = &[ProviderPlan {
+    id: "coding",
+    name_key: "plan.ark.coding",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://ark.cn-beijing.volces.com/api/coding/v3"),
+        ProviderOffering::anthropic("https://ark.cn-beijing.volces.com/api/coding"),
+    ],
+}];
+
+/// 阶跃星辰 Step Plan。
+const STEPFUN_STEP_PLAN: &[ProviderPlan] = &[ProviderPlan {
+    id: "step_plan",
+    name_key: "plan.stepfun.plan",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://api.stepfun.com/step_plan/v1"),
+        ProviderOffering::anthropic("https://api.stepfun.com/step_plan"),
+    ],
+}];
+
+/// Kimi Code 会员额度：只提供 Anthropic 面，与开放平台 API Key 不通用。
+const MOONSHOT_KIMI_CODE: &[ProviderPlan] = &[ProviderPlan {
+    id: "kimi_code",
+    name_key: "plan.moonshot.kimi_code",
+    subscription: true,
+    offerings: &[ProviderOffering::anthropic("https://api.kimi.com/coding")],
+}];
+
+/// 阿里云百炼 Coding Plan。
+///
+/// 官方只给出国内 Coding 的 Anthropic 专属域名；国际站为 coding-intl 前缀，
+/// 国内 Coding 的 OpenAI 面地址官方未给出，因此这里只列已核实的 Anthropic 面。
+const DASHSCOPE_CODING: &[ProviderPlan] = &[ProviderPlan {
+    id: "coding",
+    name_key: "plan.dashscope.coding",
+    subscription: true,
+    offerings: &[ProviderOffering::anthropic(
+        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+    )],
+}];
 /// 内置厂商预置。**国内厂商在前**，各组内按常见程度排序。
 pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
     // ==================== 国内厂商 ====================
@@ -144,6 +291,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("https://api.deepseek.com"),
             ProviderOffering::anthropic("https://api.deepseek.com/anthropic"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "zhipu",
@@ -159,6 +307,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方「Claude API 兼容」页：base 为 https://open.bigmodel.cn/api/anthropic
             ProviderOffering::anthropic("https://open.bigmodel.cn/api/anthropic"),
         ],
+        plans: ZHIPU_CODING,
     },
     ProviderPreset {
         id: "dashscope",
@@ -174,6 +323,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方 Claude Code 文档给出的 Anthropic 兼容端点
             ProviderOffering::anthropic("https://dashscope.aliyuncs.com/apps/anthropic"),
         ],
+        plans: DASHSCOPE_CODING,
     },
     ProviderPreset {
         id: "moonshot",
@@ -190,6 +340,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方文档：Anthropic 兼容 base 为 https://api.moonshot.cn/anthropic
             ProviderOffering::anthropic("https://api.moonshot.cn/anthropic"),
         ],
+        plans: MOONSHOT_KIMI_CODE,
     },
     ProviderPreset {
         id: "ark",
@@ -206,6 +357,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方 Messages（Anthropic 兼容）端点，非 Coding Plan 专属
             ProviderOffering::anthropic("https://ark.cn-beijing.volces.com/api/compatible"),
         ],
+        plans: ARK_CODING,
     },
     ProviderPreset {
         id: "minimax",
@@ -223,6 +375,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("https://api.minimax.cn/v1"),
             ProviderOffering::anthropic("https://api.minimax.cn/anthropic"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "stepfun",
@@ -239,6 +392,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // Anthropic 兼容的 base 就是裸 host（官方完整路径 /v1/messages）
             ProviderOffering::anthropic("https://api.stepfun.com"),
         ],
+        plans: STEPFUN_STEP_PLAN,
     },
     ProviderPreset {
         id: "sensenova",
@@ -252,6 +406,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         offerings: &[ProviderOffering::chat(
             "https://api.sensenova.cn/compatible-mode/v2",
         )],
+        plans: &[],
     },
     ProviderPreset {
         id: "zai",
@@ -267,6 +422,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方 Claude Code 文档给出的 base：https://api.z.ai/api/anthropic
             ProviderOffering::anthropic("https://api.z.ai/api/anthropic"),
         ],
+        plans: ZAI_CODING,
     },
     ProviderPreset {
         id: "qianfan",
@@ -283,6 +439,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("https://qianfan.baidubce.com/v2"),
             ProviderOffering::anthropic("https://qianfan.baidubce.com/anthropic"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "hunyuan",
@@ -297,6 +454,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::chat("https://api.hunyuan.cloud.tencent.com/v1"),
             ProviderOffering::anthropic("https://api.hunyuan.cloud.tencent.com/anthropic"),
         ],
+        plans: &[],
     },
     // ==================== 海外官方 ====================
     ProviderPreset {
@@ -312,6 +470,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::chat("https://api.openai.com/v1"),
             ProviderOffering::responses("https://api.openai.com/v1"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "anthropic",
@@ -323,6 +482,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "A",
         catalog_provider_ids: &["anthropic"],
         offerings: &[ProviderOffering::anthropic("https://api.anthropic.com")],
+        plans: &[],
     },
     ProviderPreset {
         id: "google",
@@ -336,6 +496,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         offerings: &[ProviderOffering::gemini(
             "https://generativelanguage.googleapis.com",
         )],
+        plans: &[],
     },
     ProviderPreset {
         id: "xai",
@@ -347,6 +508,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "X",
         catalog_provider_ids: &["xai"],
         offerings: &[ProviderOffering::chat("https://api.x.ai/v1")],
+        plans: &[],
     },
     ProviderPreset {
         id: "mistral",
@@ -358,6 +520,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "M",
         catalog_provider_ids: &["mistral"],
         offerings: &[ProviderOffering::chat("https://api.mistral.ai/v1")],
+        plans: &[],
     },
     ProviderPreset {
         id: "groq",
@@ -369,6 +532,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "Q",
         catalog_provider_ids: &["groq"],
         offerings: &[ProviderOffering::chat("https://api.groq.com/openai/v1")],
+        plans: &[],
     },
     ProviderPreset {
         id: "perplexity",
@@ -380,6 +544,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "P",
         catalog_provider_ids: &["perplexity"],
         offerings: &[ProviderOffering::chat("https://api.perplexity.ai")],
+        plans: &[],
     },
     // ==================== 聚合与中转 ====================
     ProviderPreset {
@@ -396,6 +561,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // Anthropic 兼容的 base 是裸 host（官方 Claude Code 文档：ANTHROPIC_BASE_URL=https://api.siliconflow.cn/）
             ProviderOffering::anthropic("https://api.siliconflow.cn"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "modelscope",
@@ -413,6 +579,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方「Anthropic API 兼容接口」节，标注为 beta
             ProviderOffering::anthropic("https://api-inference.modelscope.cn"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "openrouter",
@@ -429,6 +596,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方 Anthropic 接入示例：ANTHROPIC_BASE_URL=https://openrouter.ai/api（注意不是 /api/v1）
             ProviderOffering::anthropic("https://openrouter.ai/api"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "together",
@@ -443,6 +611,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             // 官方现行文档只用 api.together.ai；旧的 api.together.xyz 在文档中已不再出现
             ProviderOffering::chat("https://api.together.ai/v1"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "fireworks",
@@ -458,6 +627,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("https://api.fireworks.ai/inference/v1"),
             ProviderOffering::anthropic("https://api.fireworks.ai/inference"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "nvidia",
@@ -471,6 +641,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         offerings: &[ProviderOffering::chat(
             "https://integrate.api.nvidia.com/v1",
         )],
+        plans: &[],
     },
     ProviderPreset {
         id: "cerebras",
@@ -482,6 +653,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "C",
         catalog_provider_ids: &["cerebras"],
         offerings: &[ProviderOffering::chat("https://api.cerebras.ai/v1")],
+        plans: &[],
     },
     // ==================== 本地部署 ====================
     ProviderPreset {
@@ -498,6 +670,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("http://localhost:11434/v1"),
             ProviderOffering::anthropic("http://localhost:11434"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "lmstudio",
@@ -513,6 +686,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("http://localhost:1234/v1"),
             ProviderOffering::anthropic("http://localhost:1234"),
         ],
+        plans: &[],
     },
     ProviderPreset {
         id: "vllm",
@@ -528,6 +702,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::responses("http://localhost:8000/v1"),
             ProviderOffering::anthropic("http://localhost:8000"),
         ],
+        plans: &[],
     },
     // ==================== 自定义 ====================
     ProviderPreset {
@@ -545,6 +720,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::anthropic(""),
             ProviderOffering::gemini(""),
         ],
+        plans: &[],
     },
 ];
 
@@ -704,6 +880,64 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// 订阅套餐的形状不变量：与默认 offerings 同标准，且必须标记为订阅制。
+    #[test]
+    fn subscription_plans_are_well_formed() {
+        let mut plans_seen = 0;
+        for preset in BUILTIN_PRESETS {
+            for plan in preset.plans {
+                plans_seen += 1;
+                assert!(
+                    !plan.offerings.is_empty(),
+                    "{} 的套餐 {} 没有端点",
+                    preset.id,
+                    plan.id
+                );
+                assert!(
+                    plan.subscription,
+                    "{} 的套餐 {} 必须标记为订阅制",
+                    preset.id, plan.id
+                );
+                let mut seen: Vec<ProtocolKind> = Vec::new();
+                for offering in plan.offerings {
+                    assert!(
+                        !seen.contains(&offering.protocol),
+                        "{} 的套餐 {} 重复声明协议 {:?}",
+                        preset.id,
+                        plan.id,
+                        offering.protocol
+                    );
+                    seen.push(offering.protocol);
+                    assert!(
+                        !offering.default_endpoint.ends_with('/'),
+                        "{} 的套餐 {} 端点带结尾斜杠: {}",
+                        preset.id,
+                        plan.id,
+                        offering.default_endpoint
+                    );
+                    assert!(
+                        offering.default_endpoint.starts_with("https://"),
+                        "{} 的套餐 {} 端点应为 https: {}",
+                        preset.id,
+                        plan.id,
+                        offering.default_endpoint
+                    );
+                }
+            }
+            // 计费方式索引、名称 key 与订阅标记必须自洽
+            for i in 0..preset.plan_count() {
+                assert!(!preset.plan_name_key(i).is_empty());
+                assert_eq!(
+                    preset.plan_is_subscription(i),
+                    i > 0,
+                    "{} 的计费方式订阅标记不对",
+                    preset.id
+                );
+            }
+        }
+        assert!(plans_seen > 0, "应至少有一家厂商提供订阅套餐");
     }
 
     /// 一个厂商的 offerings 里**同一协议只能出现一次**：协议下拉与
