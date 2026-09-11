@@ -359,6 +359,60 @@ const TOKENHUB_PLANS: &[ProviderPlan] = &[
     },
 ];
 
+/// 讯飞星火 Coding Plan（官方名为 Astron Coding Plan）。
+///
+/// 讯飞的**按量**端点只提供 OpenAI 兼容；Anthropic 面只在 Coding Plan 下给出，
+/// 所以这里是一条套餐而不是默认 offering。
+const IFLYTEK_CODING: &[ProviderPlan] = &[ProviderPlan {
+    id: "coding",
+    name_key: "plan.iflytek.coding",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"),
+        ProviderOffering::anthropic("https://maas-coding-api.cn-huabei-1.xf-yun.com/anthropic"),
+    ],
+}];
+
+/// 华为云盘古 Token Plan。
+const HUAWEI_TOKEN_PLAN: &[ProviderPlan] = &[ProviderPlan {
+    id: "token_plan",
+    name_key: "plan.huawei.token_plan",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://api.modelarts-maas.com/plan/v2"),
+        ProviderOffering::anthropic("https://api.modelarts-maas.com/plan/anthropic"),
+    ],
+}];
+
+/// 京东云言犀 TokenPlan（官方已把 CodingPlan 停止并引导到 TokenPlan）。
+const JDCLOUD_TOKEN_PLAN: &[ProviderPlan] = &[ProviderPlan {
+    id: "token_plan",
+    name_key: "plan.jdcloud.token_plan",
+    subscription: true,
+    offerings: &[
+        ProviderOffering::chat("https://modelservice.jdcloud.com/tokenPlan/openai/v1"),
+        ProviderOffering::anthropic("https://modelservice.jdcloud.com/tokenPlan/anthropic"),
+    ],
+}];
+
+/// 天翼云星辰编程 Token Plan。官方只给出 OpenAI 面，Anthropic 面未记录 → 只声明已确认的。
+const TELECOM_CODING: &[ProviderPlan] = &[ProviderPlan {
+    id: "coding",
+    name_key: "plan.telecom.coding",
+    subscription: true,
+    offerings: &[ProviderOffering::chat("https://ai.ctaigw.cn/coding/v1")],
+}];
+
+/// 上游目录（models.dev / LiteLLM）尚未收录的厂商。
+///
+/// 这些厂商的「推荐模型」会是空的：界面会如实引导用户点「刷新模型列表」或手动
+/// 填 Model ID，而不是显示不存在的型号（§X.16）。它们依然值得存在——预置的价值
+/// 首先是**端点与协议的正确答案**，那部分逐条核过官方文档。
+/// 一旦上游收录，就把 id 从这份名单挪进该预置的 `catalog_provider_ids`。
+pub const PRESETS_WITHOUT_CATALOG: &[&str] = &[
+    "iflytek", "internlm", "huawei", "jdcloud", "antling", "telecom",
+];
+
 /// 内置厂商预置。**国内厂商在前**，各组内按常见程度排序。
 pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
     // ==================== 国内厂商 ====================
@@ -627,6 +681,106 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::anthropic("https://tokenhub.tencentmaas.com"),
         ],
         plans: TOKENHUB_PLANS,
+    },
+    ProviderPreset {
+        id: "iflytek",
+        name_key: "provider.iflytek",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://console.xfyun.cn/"),
+        doc_url: Some("https://www.xfyun.cn/doc/spark/"),
+        badge: "讯",
+        catalog_provider_ids: &[],
+        offerings: &[
+            // 官方《HTTP 调用文档》：OpenAI 兼容 base 为 https://spark-api-open.xf-yun.com/v1
+            // （X1.5 / X2-Flash 走 /v2，X2 走 /x2——换了模型可以在这里改端点）
+            ProviderOffering::chat("https://spark-api-open.xf-yun.com/v1"),
+        ],
+        plans: IFLYTEK_CODING,
+    },
+    ProviderPreset {
+        id: "internlm",
+        name_key: "provider.internlm",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://chat.intern-ai.org.cn/"),
+        doc_url: Some("https://internlm.intern-ai.org.cn/doc/"),
+        badge: "书",
+        catalog_provider_ids: &[],
+        offerings: &[
+            // 官方《Chat》：OpenAI 兼容 base 含 /api/v1
+            ProviderOffering::chat("https://chat.intern-ai.org.cn/api/v1"),
+            // 官方《接入 Claude Code》：POST /v1/messages，且官方明确用 x-api-key
+            ProviderOffering::anthropic("https://chat.intern-ai.org.cn"),
+        ],
+        plans: &[],
+    },
+    ProviderPreset {
+        id: "huawei",
+        name_key: "provider.huawei",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://console.huaweicloud.com/modelarts/"),
+        doc_url: Some("https://support.huaweicloud.com/model-call-maas/"),
+        badge: "华",
+        catalog_provider_ids: &[],
+        offerings: &[
+            // 官方原文：OpenAI SDK 的 base_url 设为 https://api.modelarts-maas.com/openai/v1
+            // （该兼容接口目前仅「西南-贵阳一」地域开通）
+            ProviderOffering::chat("https://api.modelarts-maas.com/openai/v1"),
+            // 官方 Clauude Code 文档给出的 Anthropic 兼容 base
+            ProviderOffering::anthropic("https://api.modelarts-maas.com/anthropic"),
+        ],
+        plans: HUAWEI_TOKEN_PLAN,
+    },
+    ProviderPreset {
+        id: "jdcloud",
+        name_key: "provider.jdcloud",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://console.jdcloud.com/"),
+        doc_url: Some("https://docs.jdcloud.com/cn/yanxi-cap/invoke-service"),
+        badge: "京",
+        catalog_provider_ids: &[],
+        offerings: &[
+            // 官方《调用服务》：预置服务 base 为 https://modelservice.jdcloud.com/v1
+            ProviderOffering::chat("https://modelservice.jdcloud.com/v1"),
+            // 按量预置服务是否提供 Anthropic 面官方未说明 → 不声明，只在 TokenPlan 下声明
+        ],
+        plans: JDCLOUD_TOKEN_PLAN,
+    },
+    ProviderPreset {
+        id: "antling",
+        name_key: "provider.antling",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://developer.ant-ling.com/zh-CN/docs/getting-started/quickstart/"),
+        doc_url: Some("https://developer.ant-ling.com/zh-CN/docs/api-reference/"),
+        badge: "蚂",
+        catalog_provider_ids: &[],
+        offerings: &[
+            // 官方 OpenAI SDK 示例：base_url = https://api.ant-ling.com/v1
+            // 官方 API 参考只列 OpenAI 兼容，没有 Anthropic 面 → 不声明
+            ProviderOffering::chat("https://api.ant-ling.com/v1"),
+        ],
+        plans: &[],
+    },
+    ProviderPreset {
+        id: "telecom",
+        name_key: "provider.telecom",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://www.ctyun.cn/document/11061839"),
+        doc_url: Some("https://www.ctyun.cn/document/11061839/11062312"),
+        badge: "天",
+        catalog_provider_ids: &[],
+        offerings: &[
+            // 天翼云星辰 TokenHub：base 含 /v1（海外为 ai.ctaigw.com/{region}/v1）
+            ProviderOffering::chat("https://ai.ctaigw.cn/v1"),
+            // 官方《Anthropic 兼容》逐字给出 POST /v1/messages + x-api-key
+            ProviderOffering::anthropic("https://ai.ctaigw.cn"),
+        ],
+        plans: TELECOM_CODING,
     },
     // ==================== 海外官方 ====================
     ProviderPreset {
@@ -1019,12 +1173,34 @@ mod tests {
                 ProviderCategory::Local | ProviderCategory::Custom => {
                     assert!(!preset.has_catalog_source(), "{} 不该有目录来源", preset.id);
                 }
-                _ => assert!(
-                    preset.has_catalog_source(),
-                    "{} 声明了厂商却没有目录匹配键，推荐模型会永远为空",
-                    preset.id
-                ),
+                _ => {
+                    if PRESETS_WITHOUT_CATALOG.contains(&preset.id) {
+                        assert!(
+                            !preset.has_catalog_source(),
+                            "{} 已经有目录键了，请从 PRESETS_WITHOUT_CATALOG 移除",
+                            preset.id
+                        );
+                    } else {
+                        assert!(
+                            preset.has_catalog_source(),
+                            "{} 声明了厂商却没有目录匹配键，推荐模型会永远为空",
+                            preset.id
+                        );
+                    }
+                }
             }
+        }
+    }
+
+    /// 例外名单不能有僵尸条目：每个 id 必须是真的预置、且真的没有目录键。
+    #[test]
+    fn the_no_catalog_exception_list_has_no_stale_entries() {
+        for id in PRESETS_WITHOUT_CATALOG {
+            let preset = preset_by_id(id).unwrap_or_else(|| panic!("例外名单里的 {id} 不是预置"));
+            assert!(
+                !preset.has_catalog_source(),
+                "{id} 已有目录键，请移出例外名单"
+            );
         }
     }
 

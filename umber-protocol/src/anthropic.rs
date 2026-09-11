@@ -70,7 +70,19 @@ impl AnthropicAdapter {
         ];
         if let Ok(Some(secret)) = credentials.get(credential_ref) {
             if !secret.expose().is_empty() {
+                // 两个鉴权头都发，因为「Anthropic 兼容」在实践中分两派：
+                // - Anthropic 官方（以及 DeepSeek/智谱/小米 MiMo 等）用 `x-api-key`；
+                // - 但大量网关的官方文档用的是 `Authorization: Bearer` /
+                //   `ANTHROPIC_AUTH_TOKEN`：美团 LongCat、讯飞星火、华为云盘古、
+                //   京东云言犀、无问芯穹、摩尔线程夸娥云、云知声、有道子曰……
+                // 只发 x-api-key 时后者会直接鉴权失败。两个头带的是同一个密钥，
+                // 官方端点会忽略多余的那个，所以这是安全的（总案 §16：不假定
+                // "OpenAI/Anthropic Compatible" 就等于同一种鉴权）。
                 headers.push(("x-api-key".into(), secret.expose().to_string()));
+                headers.push((
+                    "authorization".into(),
+                    format!("Bearer {}", secret.expose()),
+                ));
             }
         }
         headers
@@ -553,5 +565,55 @@ impl AnthropicStreamParser {
             _ => {} // ping 等
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use umber_credential::{InMemoryCredentialStore, SecretString};
+
+    fn header_value(headers: &Headers, name: &str) -> Option<String> {
+        headers
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.clone())
+    }
+
+    /// 回归：只要有一家「Anthropic 兼容」网关用 Bearer（美团 LongCat、讯飞、
+    /// 华为、京东、无问芯穹、摩尔线程、云知声的官方文档都是 Bearer/AUTH_TOKEN），
+    /// 只发 x-api-key 就会鉴权失败——所以两个头都要发。
+    #[test]
+    fn sends_both_the_api_key_and_bearer_headers() {
+        let store = InMemoryCredentialStore::new();
+        let reference = CredentialRef::from("test/api_key");
+        store
+            .set(&reference, SecretString::new("sk-test"))
+            .expect("in-memory store accepts writes");
+
+        let headers = AnthropicAdapter::headers(&store, &reference);
+        assert_eq!(
+            header_value(&headers, "x-api-key").as_deref(),
+            Some("sk-test")
+        );
+        assert_eq!(
+            header_value(&headers, "authorization").as_deref(),
+            Some("Bearer sk-test")
+        );
+        assert_eq!(
+            header_value(&headers, "anthropic-version").as_deref(),
+            Some("2023-06-01")
+        );
+    }
+
+    /// 没有存密钥时不得发空头（那会让 provider 报"无效密钥"而不是"缺少密钥"）。
+    #[test]
+    fn omits_auth_headers_without_a_stored_credential() {
+        let store = InMemoryCredentialStore::new();
+        let reference = CredentialRef::from("test/api_key");
+
+        let headers = AnthropicAdapter::headers(&store, &reference);
+        assert!(header_value(&headers, "x-api-key").is_none());
+        assert!(header_value(&headers, "authorization").is_none());
     }
 }
