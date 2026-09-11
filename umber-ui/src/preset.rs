@@ -403,6 +403,35 @@ const TELECOM_CODING: &[ProviderPlan] = &[ProviderPlan {
     offerings: &[ProviderOffering::chat("https://ai.ctaigw.cn/coding/v1")],
 }];
 
+/// 百度千帆 Token Plan（个人版 / 企业版）。
+///
+/// 官方已停售 Coding Plan（2026-07-13 起停止新购，存量可用到周期结束），
+/// 并引导迁移到 Token Plan，所以这里只建 Token Plan 的两种形态。
+/// 端点逐字来自官方 Token Plan 总览页的「兼容 OpenAI / Anthropic 接口协议的
+/// Base URL」表；两种形态的 base URL 不同，因此是两条计费方式。
+const QIANFAN_TOKEN_PLAN: &[ProviderPlan] = &[
+    ProviderPlan {
+        id: "token_plan_personal",
+        name_key: "plan.qianfan.token_plan_personal",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://qianfan.baidubce.com/v2/tokenplan/personal"),
+            ProviderOffering::anthropic(
+                "https://qianfan.baidubce.com/anthropic/tokenplan/personal",
+            ),
+        ],
+    },
+    ProviderPlan {
+        id: "token_plan_team",
+        name_key: "plan.qianfan.token_plan_team",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://qianfan.baidubce.com/v2/tokenplan/team"),
+            ProviderOffering::anthropic("https://qianfan.baidubce.com/anthropic/tokenplan/team"),
+        ],
+    },
+];
+
 /// 上游目录（models.dev / LiteLLM）尚未收录的厂商。
 ///
 /// 这些厂商的「推荐模型」会是空的：界面会如实引导用户点「刷新模型列表」或手动
@@ -597,9 +626,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         offerings: &[
             ProviderOffering::chat("https://qianfan.baidubce.com/v2"),
             ProviderOffering::responses("https://qianfan.baidubce.com/v2"),
+            // 官方 Claude Code 文档逐字给出 ANTHROPIC_BASE_URL，并注明用「千帆通用
+            // API Key」——因此它归在按量付费名下（该页不在「按量付费」标题下，属推断）。
             ProviderOffering::anthropic("https://qianfan.baidubce.com/anthropic"),
         ],
-        plans: &[],
+        plans: QIANFAN_TOKEN_PLAN,
     },
     ProviderPreset {
         id: "hunyuan",
@@ -884,7 +915,9 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         catalog_provider_ids: &["siliconflow", "siliconflow-cn"],
         offerings: &[
             ProviderOffering::chat("https://api.siliconflow.cn/v1"),
-            // Anthropic 兼容的 base 是裸 host（官方 Claude Code 文档：ANTHROPIC_BASE_URL=https://api.siliconflow.cn/）
+            // 官方《创建对话请求（Anthropic）》端点为 https://api.siliconflow.cn/v1/messages，
+            // Claude Code 接入页写 ANTHROPIC_BASE_URL="https://api.siliconflow.cn/"
+            // ——官方文档中没有 /anthropic 这一层路径，base 就是裸 host。
             ProviderOffering::anthropic("https://api.siliconflow.cn"),
         ],
         plans: &[],
@@ -902,7 +935,9 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
             ProviderOffering::chat("https://api-inference.modelscope.cn/v1"),
             // 官方文档「Responses API」节：仅支持 create，且模型目前限 Qwen 系列
             ProviderOffering::responses("https://api-inference.modelscope.cn/v1"),
-            // 官方「Anthropic API 兼容接口」节，标注为 beta
+            // 官方《API-Inference》「大语言模型 LLM（Anthropic API 兼容接口）」一节
+            // 给出 base_url = https://api-inference.modelscope.cn（标注 beta），
+            // 同样没有 /anthropic 这一层路径。
             ProviderOffering::anthropic("https://api-inference.modelscope.cn"),
         ],
         plans: &[],
