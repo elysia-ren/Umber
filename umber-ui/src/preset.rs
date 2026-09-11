@@ -259,18 +259,75 @@ const MOONSHOT_KIMI_CODE: &[ProviderPlan] = &[ProviderPlan {
     offerings: &[ProviderOffering::anthropic("https://api.kimi.com/coding")],
 }];
 
-/// 阿里云百炼 Coding Plan。
+/// 阿里云百炼的两种订阅制计费方式（Coding Plan / Token Plan）。
 ///
-/// 官方只给出国内 Coding 的 Anthropic 专属域名；国际站为 coding-intl 前缀，
-/// 国内 Coding 的 OpenAI 面地址官方未给出，因此这里只列已核实的 Anthropic 面。
-const DASHSCOPE_CODING: &[ProviderPlan] = &[ProviderPlan {
-    id: "coding",
-    name_key: "plan.dashscope.coding",
-    subscription: true,
-    offerings: &[ProviderOffering::anthropic(
-        "https://coding.dashscope.aliyuncs.com/apps/anthropic",
-    )],
-}];
+/// 官方《Token Plan 快速开始》明确写着：Token Plan、Coding Plan 与按量付费的
+/// API Key 与 Base URL **完全隔离，必须配套使用，不可混用**——这正是「计费方式」
+/// 要建模的东西，混用只会得到认证失败。该页同时给出了 Coding Plan 的 OpenAI
+/// 面（此前只有 Anthropic 面）与 Token Plan 的两个面。
+/// 国际站（coding-intl / 新加坡等）不在本预置内，用「自定义」接。
+const DASHSCOPE_PLANS: &[ProviderPlan] = &[
+    ProviderPlan {
+        id: "coding",
+        name_key: "plan.dashscope.coding",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://coding.dashscope.aliyuncs.com/v1"),
+            ProviderOffering::anthropic("https://coding.dashscope.aliyuncs.com/apps/anthropic"),
+        ],
+    },
+    ProviderPlan {
+        id: "token_plan",
+        name_key: "plan.dashscope.token_plan",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat(
+                "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            ),
+            ProviderOffering::anthropic(
+                "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
+            ),
+        ],
+    },
+];
+/// 小米 MiMo Token Plan（订阅）。
+///
+/// 官方《Quick Access》给出三个集群，端点各不相同，且订阅页才显示账号属于哪个：
+/// 只挑一个做默认，另外两个集群的用户一开箱就是"连接失败"——所以三个都列出来，
+/// 让用户按自己控制台上显示的集群选（集群选错等同于地址错）。
+const MIMO_TOKEN_PLAN: &[ProviderPlan] = &[
+    ProviderPlan {
+        id: "token_plan_cn",
+        name_key: "plan.mimo.token_plan_cn",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://token-plan-cn.xiaomimimo.com/v1"),
+            ProviderOffering::responses("https://token-plan-cn.xiaomimimo.com/v1"),
+            ProviderOffering::anthropic("https://token-plan-cn.xiaomimimo.com/anthropic"),
+        ],
+    },
+    ProviderPlan {
+        id: "token_plan_sgp",
+        name_key: "plan.mimo.token_plan_sgp",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://token-plan-sgp.xiaomimimo.com/v1"),
+            ProviderOffering::responses("https://token-plan-sgp.xiaomimimo.com/v1"),
+            ProviderOffering::anthropic("https://token-plan-sgp.xiaomimimo.com/anthropic"),
+        ],
+    },
+    ProviderPlan {
+        id: "token_plan_ams",
+        name_key: "plan.mimo.token_plan_ams",
+        subscription: true,
+        offerings: &[
+            ProviderOffering::chat("https://token-plan-ams.xiaomimimo.com/v1"),
+            ProviderOffering::responses("https://token-plan-ams.xiaomimimo.com/v1"),
+            ProviderOffering::anthropic("https://token-plan-ams.xiaomimimo.com/anthropic"),
+        ],
+    },
+];
+
 /// 内置厂商预置。**国内厂商在前**，各组内按常见程度排序。
 pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
     // ==================== 国内厂商 ====================
@@ -317,13 +374,18 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         key_url: Some("https://bailian.console.aliyun.com/?apiKey=1"),
         doc_url: Some("https://help.aliyun.com/zh/model-studio/"),
         badge: "阿",
-        catalog_provider_ids: &["alibaba", "alibaba-cn"],
+        catalog_provider_ids: &[
+            "alibaba",
+            "alibaba-cn",
+            "alibaba-coding-plan-cn",
+            "alibaba-token-plan-cn",
+        ],
         offerings: &[
             ProviderOffering::chat("https://dashscope.aliyuncs.com/compatible-mode/v1"),
             // 官方 Claude Code 文档给出的 Anthropic 兼容端点
             ProviderOffering::anthropic("https://dashscope.aliyuncs.com/apps/anthropic"),
         ],
-        plans: DASHSCOPE_CODING,
+        plans: DASHSCOPE_PLANS,
     },
     ProviderPreset {
         id: "moonshot",
@@ -333,7 +395,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         key_url: Some("https://platform.moonshot.cn/console/api-keys"),
         doc_url: Some("https://platform.moonshot.cn/docs"),
         badge: "K",
-        catalog_provider_ids: &["moonshotai", "moonshotai-cn"],
+        catalog_provider_ids: &["moonshotai", "moonshotai-cn", "kimi-for-coding"],
         offerings: &[
             ProviderOffering::chat("https://api.moonshot.cn/v1"),
             ProviderOffering::responses("https://api.moonshot.cn/v1"),
@@ -350,7 +412,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         key_url: Some("https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey"),
         doc_url: Some("https://www.volcengine.com/docs/82379"),
         badge: "火",
-        catalog_provider_ids: &["volcengine"],
+        catalog_provider_ids: &["volcengine", "volcengine-coding-plan"],
         offerings: &[
             ProviderOffering::chat("https://ark.cn-beijing.volces.com/api/v3"),
             ProviderOffering::responses("https://ark.cn-beijing.volces.com/api/v3"),
@@ -385,7 +447,12 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         key_url: Some("https://platform.stepfun.com/interface-key"),
         doc_url: Some("https://platform.stepfun.com/docs"),
         badge: "阶",
-        catalog_provider_ids: &["stepfun", "stepfun-ai"],
+        catalog_provider_ids: &[
+            "stepfun",
+            "stepfun-ai",
+            "stepfun-step-plan",
+            "stepfun-ai-step-plan",
+        ],
         offerings: &[
             ProviderOffering::chat("https://api.stepfun.com/v1"),
             ProviderOffering::responses("https://api.stepfun.com/v1"),
@@ -416,7 +483,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         key_url: Some("https://z.ai/manage-apikey/apikey-list"),
         doc_url: Some("https://docs.z.ai"),
         badge: "Z",
-        catalog_provider_ids: &["zai"],
+        catalog_provider_ids: &["zai", "zai-coding-plan"],
         offerings: &[
             ProviderOffering::chat("https://api.z.ai/api/paas/v4"),
             // 官方 Claude Code 文档给出的 base：https://api.z.ai/api/anthropic
@@ -453,6 +520,48 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         offerings: &[
             ProviderOffering::chat("https://api.hunyuan.cloud.tencent.com/v1"),
             ProviderOffering::anthropic("https://api.hunyuan.cloud.tencent.com/anthropic"),
+        ],
+        plans: &[],
+    },
+    ProviderPreset {
+        id: "xiaomi",
+        name_key: "provider.xiaomi",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://platform.xiaomimimo.com/#/console/api-keys"),
+        doc_url: Some("https://mimo.mi.com"),
+        badge: "米",
+        // 上游目录按计费方式拆成四个 provider 键：按量 + 三个 Token Plan 集群
+        catalog_provider_ids: &[
+            "xiaomi",
+            "xiaomi-token-plan-cn",
+            "xiaomi-token-plan-sgp",
+            "xiaomi-token-plan-ams",
+        ],
+        offerings: &[
+            // 官方《First API Call》：OpenAI 兼容 https://api.xiaomimimo.com/v1
+            ProviderOffering::chat("https://api.xiaomimimo.com/v1"),
+            // 官方《OpenAI Responses API Compatibility》：POST /v1/responses
+            ProviderOffering::responses("https://api.xiaomimimo.com/v1"),
+            // 官方《Anthropic Messages API Compatibility》：POST /anthropic/v1/messages
+            ProviderOffering::anthropic("https://api.xiaomimimo.com/anthropic"),
+        ],
+        plans: MIMO_TOKEN_PLAN,
+    },
+    ProviderPreset {
+        id: "longcat",
+        name_key: "provider.longcat",
+        category: ProviderCategory::China,
+        keyless: false,
+        key_url: Some("https://longcat.chat/platform"),
+        doc_url: Some("https://longcat.chat/platform/docs/zh/api-docs"),
+        badge: "L",
+        catalog_provider_ids: &["longcat"],
+        offerings: &[
+            // 官方《API 概述》：OpenAI 兼容 POST /openai/v1/chat/completions
+            ProviderOffering::chat("https://api.longcat.chat/openai/v1"),
+            // 官方《API 概述》：Anthropic 兼容 POST /anthropic/v1/messages
+            ProviderOffering::anthropic("https://api.longcat.chat/anthropic"),
         ],
         plans: &[],
     },
