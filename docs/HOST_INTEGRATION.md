@@ -106,6 +106,19 @@ if let Some(tier) = chain.probe() {
   用于任何要写日志或诊断的原始载荷（§28）
 - **加密文件层的边界**：密钥与数据同机，防的是"配置文件被顺手读走 / 同步到云盘"，
   不防本机恶意软件——所以告警是契约要求，不是可选。
+- **密钥落到哪个请求头由 Adapter 决定，宿主不参与**：
+
+  | 议 | 请求头 |
+  |------|--------|
+  | `openai_chat` / `openai_responses` | `Authorization: Bearer <key>` |
+  | `gemini` | `x-goog-api-key: <key>` |
+  | `anthropic_messages` | `x-api-key` 和 `Authorization: Bearer` 同时发 |
+
+  Anthropic 同时发两个头是刻意的：Anthropic 官方（以及 DeepSeek、智谱 GLM、小米 MiMo
+  等）认 `x-api-key`，而大量「Anthropic 兼容」网关（美团 LongCat、讯飞星火、华为云盘古、
+  京东云言犀、无问芯穹、摩尔线程夸峨云、云知声等）的官方文档用的是
+  `Authorization: Bearer` / `ANTHROPIC_AUTH_TOKEN`。两个头带的是同一把密钥，官方端点会忽略多余的那个——
+  宿主换一家网关不需要改代码（总案 §16：不假定 "Compatible" 就等于同一种鉴权）。
 
 ## 4.1 网络与代理
 

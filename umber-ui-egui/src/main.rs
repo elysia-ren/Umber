@@ -102,10 +102,10 @@ fn data_dir() -> std::path::PathBuf {
         return std::path::PathBuf::from(appdata).join("Umber");
     }
     if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
-        return std::path::PathBuf::from(xdg).join("universal-model-runtime");
+        return std::path::PathBuf::from(xdg).join("umber");
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    std::path::PathBuf::from(home).join(".local/share/universal-model-runtime")
+    std::path::PathBuf::from(home).join(".local/share/umber")
 }
 
 impl StoreBundle {
