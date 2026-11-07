@@ -82,10 +82,10 @@ let endpoint = Endpoint {
     url: "https://api.deepseek.com/v1".into(),
 };
 let deployment = Deployment {
-    id: "deepseek/official/openai_chat/deepseek-chat".into(),
+    id: "deepseek/official/openai_chat/deepseek-flash".into(),
     endpoint_id: endpoint.id.clone(),
     protocol: ProtocolKind::OpenAiChat,
-    model_id: "deepseek-chat".into(),
+    model_id: "deepseek-flash".into(),
 };
 
 // 4) Adapter 负责协议转换，Engine 负责调用生命周期
@@ -132,11 +132,11 @@ UmerRuntime* rt = runtime_init();
 
 /* 注册部署：请求里的 model 必须与此处的 id 完全一致 */
 const char* config =
-    "{\"id\":\"deepseek/official/openai_chat/deepseek-chat\","
+    "{\"id\":\"deepseek/official/openai_chat/deepseek-flash\","
     "\"provider_id\":\"deepseek\","
     "\"protocol\":\"openai_chat\","
     "\"endpoint_url\":\"https://api.deepseek.com/v1\","
-    "\"model_id\":\"deepseek-chat\","
+    "\"model_id\":\"deepseek-flash\","
     "\"credential_ref\":\"deepseek/api_key\"}";
 runtime_set_deployment(rt, config, strlen(config));
 
@@ -147,7 +147,7 @@ runtime_set_credential(rt, "deepseek/api_key", getenv("DEEPSEEK_API_KEY"));
 runtime_load_catalog(rt, "catalog.json");
 
 const char* req =
-    "{\"model\":\"deepseek/official/openai_chat/deepseek-chat\",\"messages\":["
+    "{\"model\":\"deepseek/official/openai_chat/deepseek-flash\",\"messages\":["
     "{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"你好\"}]}]}";
 
 UmerStream* stream = NULL;
@@ -190,18 +190,18 @@ from umber import Runtime
 
 with Runtime() as rt:                       # 自动校验 ABI 主版本
     rt.set_deployment({
-        "id": "deepseek/official/openai_chat/deepseek-chat",
+        "id": "deepseek/official/openai_chat/deepseek-flash",
         "provider_id": "deepseek",
         "protocol": "openai_chat",
         "endpoint_url": "https://api.deepseek.com/v1",
-        "model_id": "deepseek-chat",
+        "model_id": "deepseek-flash",
         "credential_ref": "deepseek/api_key",
     })
     rt.set_credential("deepseek/api_key", "sk-...")
     rt.load_catalog("catalog.json")         # 可选，离线可用
 
     request = {
-        "model": "deepseek/official/openai_chat/deepseek-chat",
+        "model": "deepseek/official/openai_chat/deepseek-flash",
         "messages": [{"role": "user", "content": [{"type": "text", "text": "你好"}]}],
     }
     with rt.stream(request) as stream:

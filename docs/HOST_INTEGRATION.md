@@ -28,10 +28,10 @@ let endpoint = Endpoint {
 
 // 3) Deployment 指向 Provider 侧模型 ID（总案 §8）
 let deployment = Deployment {
-    id: "deepseek/official/openai_chat/deepseek-chat".into(),
+    id: "deepseek/official/openai_chat/deepseek-flash".into(),
     endpoint_id: endpoint.id.clone(),
     protocol: ProtocolKind::OpenAiChat,
-    model_id: "deepseek-chat".into(),
+    model_id: "deepseek-flash".into(),
 };
 
 // 4) Adapter 负责协议转换；Engine 负责生命周期（总案 §28–§31）

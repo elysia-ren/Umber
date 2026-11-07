@@ -89,10 +89,10 @@ let endpoint = Endpoint {
     url: "https://api.deepseek.com/v1".into(),
 };
 let deployment = Deployment {
-    id: "deepseek/official/openai_chat/deepseek-chat".into(),
+    id: "deepseek/official/openai_chat/deepseek-flash".into(),
     endpoint_id: endpoint.id.clone(),
     protocol: ProtocolKind::OpenAiChat,
-    model_id: "deepseek-chat".into(),
+    model_id: "deepseek-flash".into(),
 };
 
 // 4) The adapter converts protocol; the engine owns the invocation lifecycle.
@@ -140,11 +140,11 @@ UmerRuntime* rt = runtime_init();
 
 /* Register the deployment: the request model must match this id exactly. */
 const char* config =
-    "{\"id\":\"deepseek/official/openai_chat/deepseek-chat\","
+    "{\"id\":\"deepseek/official/openai_chat/deepseek-flash\","
     "\"provider_id\":\"deepseek\","
     "\"protocol\":\"openai_chat\","
     "\"endpoint_url\":\"https://api.deepseek.com/v1\","
-    "\"model_id\":\"deepseek-chat\","
+    "\"model_id\":\"deepseek-flash\","
     "\"credential_ref\":\"deepseek/api_key\"}";
 runtime_set_deployment(rt, config, strlen(config));
 
@@ -155,7 +155,7 @@ runtime_set_credential(rt, "deepseek/api_key", getenv("DEEPSEEK_API_KEY"));
 runtime_load_catalog(rt, "catalog.json");
 
 const char* req =
-    "{\"model\":\"deepseek/official/openai_chat/deepseek-chat\",\"messages\":["
+    "{\"model\":\"deepseek/official/openai_chat/deepseek-flash\",\"messages\":["
     "{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello\"}]}]}";
 
 UmerStream* stream = NULL;
@@ -199,18 +199,18 @@ from umber import Runtime
 
 with Runtime() as rt:                       # checks the ABI major version
     rt.set_deployment({
-        "id": "deepseek/official/openai_chat/deepseek-chat",
+        "id": "deepseek/official/openai_chat/deepseek-flash",
         "provider_id": "deepseek",
         "protocol": "openai_chat",
         "endpoint_url": "https://api.deepseek.com/v1",
-        "model_id": "deepseek-chat",
+        "model_id": "deepseek-flash",
         "credential_ref": "deepseek/api_key",
     })
     rt.set_credential("deepseek/api_key", "sk-...")
     rt.load_catalog("catalog.json")         # optional, offline
 
     request = {
-        "model": "deepseek/official/openai_chat/deepseek-chat",
+        "model": "deepseek/official/openai_chat/deepseek-flash",
         "messages": [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}],
     }
     with rt.stream(request) as stream:

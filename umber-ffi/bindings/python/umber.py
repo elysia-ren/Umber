@@ -24,16 +24,16 @@
 
     with Runtime() as rt:
         rt.set_deployment({
-            "id": "deepseek/official/openai_chat/deepseek-chat",
+            "id": "deepseek/official/openai_chat/deepseek-flash",
             "provider_id": "deepseek",
             "protocol": "openai_chat",          # openai_chat / openai_responses
             "endpoint_url": "https://api.deepseek.com/v1",   # / anthropic_messages / gemini
-            "model_id": "deepseek-chat",
+            "model_id": "deepseek-flash",
             "credential_ref": "deepseek/api_key",
         })
         rt.set_credential("deepseek/api_key", "sk-...")   # 只在内存，进程退出即丢
         rt.load_catalog("catalog.json")                   # 可选：离线模型知识
-        with rt.stream({"model": "deepseek/official/openai_chat/deepseek-chat",
+        with rt.stream({"model": "deepseek/official/openai_chat/deepseek-flash",
                         "messages": [{"role": "user",
                                       "content": [{"type": "text", "text": "你好"}]}]}) as stream:
             for event in stream:

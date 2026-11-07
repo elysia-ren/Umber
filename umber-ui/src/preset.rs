@@ -353,8 +353,10 @@ const TOKENHUB_PLANS: &[ProviderPlan] = &[
         name_key: "plan.tokenhub.token_plan",
         subscription: true,
         offerings: &[
-            ProviderOffering::chat("https://api.lkeap.cloud.tencent.com/plan/v3"),
-            ProviderOffering::anthropic("https://api.lkeap.cloud.tencent.com/plan/anthropic"),
+            // 官方《Token Plan 快速入门》现行给的是 tokenhub.tencentmaas.com/plan/*；
+            // api.lkeap.cloud.tencent.com/plan/* 已不在文档里（旧的 Coding Plan 仍在 lkeap）。
+            ProviderOffering::chat("https://tokenhub.tencentmaas.com/plan/v3"),
+            ProviderOffering::anthropic("https://tokenhub.tencentmaas.com/plan/anthropic"),
         ],
     },
 ];
@@ -369,6 +371,8 @@ const IFLYTEK_CODING: &[ProviderPlan] = &[ProviderPlan {
     subscription: true,
     offerings: &[
         ProviderOffering::chat("https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"),
+        // 官方 Coding Plan 页：Responses 走 .../v1/responses
+        ProviderOffering::responses("https://maas-coding-api.cn-huabei-1.xf-yun.com/v1"),
         ProviderOffering::anthropic("https://maas-coding-api.cn-huabei-1.xf-yun.com/anthropic"),
     ],
 }];
@@ -455,11 +459,19 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "D",
         catalog_provider_ids: &["deepseek"],
         offerings: &[
-            // 官方 base_url 表给的基准是 https://api.deepseek.com（无 /v1）。
-            // /v1 是可用别名，实测两者都通；这里跟官方文档保持一致。
-            ProviderOffering::chat("https://api.deepseek.com"),
-            // 官方 Responses API（实测 POST /responses -> 200）
+            // 官方 Quick Start 的 base_url 表（无 /v1）：
+            //   base_url (OpenAI)    https://api.deepseek.com
+            //   base_url (Anthropic) https://api.deepseek.com/anthropic
+            // 官方《Using the Responses API》：Responses 已原生支持，Codex 走它，
+            // 所以这里把 Responses 放在首位作为默认协议；Chat Completions 仍然可用，
+            // 只是不再是首选。
+            //
+            // 注意区分两件事（官方 2026-04-24 公告）：
+            //   被下线的是**模型名** deepseek-chat / deepseek-reasoner（2026-07-24 停止），
+            //   不是 Chat Completions 这个端点。现行模型名：deepseek-flash
+            //   （= DeepSeek-V4.1-Flash-1017）与 deepseek-v4-pro。
             ProviderOffering::responses("https://api.deepseek.com"),
+            ProviderOffering::chat("https://api.deepseek.com"),
             ProviderOffering::anthropic("https://api.deepseek.com/anthropic"),
         ],
         plans: &[],
@@ -470,11 +482,14 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://open.bigmodel.cn/usercenter/apikeys"),
-        doc_url: Some("https://open.bigmodel.cn/dev/api"),
+        doc_url: Some("https://docs.bigmodel.cn"),
         badge: "智",
         catalog_provider_ids: &["zhipuai", "zhipuai-coding-plan"],
         offerings: &[
             ProviderOffering::chat("https://open.bigmodel.cn/api/paas/v4"),
+            // 官方原文：Response API 的基址是 https://open.bigmodel.cn/api/v1，
+            // **不是**对话补全用的 /api/paas/v4。
+            ProviderOffering::responses("https://open.bigmodel.cn/api/v1"),
             // 官方「Claude API 兼容」页：base 为 https://open.bigmodel.cn/api/anthropic
             ProviderOffering::anthropic("https://open.bigmodel.cn/api/anthropic"),
         ],
@@ -486,7 +501,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://bailian.console.aliyun.com/?apiKey=1"),
-        doc_url: Some("https://help.aliyun.com/zh/model-studio/"),
+        doc_url: Some("https://help.aliyun.com/zh/model-studio/what-is-model-studio"),
         badge: "阿",
         catalog_provider_ids: &[
             "alibaba",
@@ -496,6 +511,9 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         ],
         offerings: &[
             ProviderOffering::chat("https://dashscope.aliyuncs.com/compatible-mode/v1"),
+            // 官方《OpenAI 兼容 - Responses》：与 chat 同 base（POST /compatible-mode/v1/responses）。
+            // 旧的 /api/v2/apps/protocols/compatible-mode/v1/responses 官方已「停止维护」。
+            ProviderOffering::responses("https://dashscope.aliyuncs.com/compatible-mode/v1"),
             // 官方 Claude Code 文档给出的 Anthropic 兼容端点
             ProviderOffering::anthropic("https://dashscope.aliyuncs.com/apps/anthropic"),
         ],
@@ -506,8 +524,8 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.moonshot",
         category: ProviderCategory::China,
         keyless: false,
-        key_url: Some("https://platform.moonshot.cn/console/api-keys"),
-        doc_url: Some("https://platform.moonshot.cn/docs"),
+        key_url: Some("https://platform.kimi.com/console/api-keys"),
+        doc_url: Some("https://platform.kimi.com/docs"),
         badge: "K",
         catalog_provider_ids: &["moonshotai", "moonshotai-cn", "kimi-for-coding"],
         offerings: &[
@@ -524,7 +542,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey"),
-        doc_url: Some("https://www.volcengine.com/docs/82379"),
+        doc_url: Some("https://docs.volcengine.com/docs/ark"),
         badge: "火",
         catalog_provider_ids: &["volcengine", "volcengine-coding-plan"],
         offerings: &[
@@ -540,8 +558,8 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.minimax",
         category: ProviderCategory::China,
         keyless: false,
-        key_url: Some("https://platform.minimaxi.com/user-center/basic-information/interface-key"),
-        doc_url: Some("https://platform.minimaxi.com/document"),
+        key_url: Some("https://platform.minimax.cn/console/keys"),
+        doc_url: Some("https://platform.minimax.cn/docs"),
         badge: "mm",
         catalog_provider_ids: &[
             "minimax",
@@ -567,7 +585,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://platform.stepfun.com/interface-key"),
-        doc_url: Some("https://platform.stepfun.com/docs"),
+        doc_url: Some("https://platform.stepfun.com/docs/zh/welcome"),
         badge: "阶",
         catalog_provider_ids: &[
             "stepfun",
@@ -603,11 +621,13 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://z.ai/manage-apikey/apikey-list"),
-        doc_url: Some("https://docs.z.ai"),
+        doc_url: Some("https://docs.z.ai/guides/overview/quick-start"),
         badge: "Z",
         catalog_provider_ids: &["zai", "zai-coding-plan"],
         offerings: &[
             ProviderOffering::chat("https://api.z.ai/api/paas/v4"),
+            // 官方 API Key 管理页列出「OpenAI Responses — general endpoint」
+            ProviderOffering::responses("https://api.z.ai/api/v1"),
             // 官方 Claude Code 文档给出的 base：https://api.z.ai/api/anthropic
             ProviderOffering::anthropic("https://api.z.ai/api/anthropic"),
         ],
@@ -619,7 +639,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://console.bce.baidu.com/iam/#/iam/apikey/list"),
-        doc_url: Some("https://cloud.baidu.com/doc/WENXINWORKSHOP/index.html"),
+        doc_url: Some("https://cloud.baidu.com/doc/qianfan/index.html"),
         badge: "百",
         // 上游目录暂无 baidu 条目：界面会显示"目录无该厂商数据，请刷新模型列表"
         catalog_provider_ids: &["baidu", "qianfan"],
@@ -637,13 +657,17 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.hunyuan",
         category: ProviderCategory::China,
         keyless: false,
-        key_url: Some("https://console.cloud.tencent.com/hunyuan/api-key"),
-        doc_url: Some("https://cloud.tencent.com/document/product/1729"),
+        // 旧「腾讯混元大模型」专属平台（api.hunyuan.cloud.tencent.com）按官方公告
+        // 【TokenHub】已于 2026-06-30 停售、**2026-09-30 00:00 全面停服下线**
+        // (https://cloud.tencent.com/announce/detail/2287)。混元模型现在由
+        // TokenHub 提供，因此这里直接指向 TokenHub 的端点，避免点开就是死服务。
+        key_url: Some("https://cloud.tencent.com/document/product/1823/130078"),
+        doc_url: Some("https://cloud.tencent.com/document/product/1823"),
         badge: "腾",
         catalog_provider_ids: &["tencent", "hunyuan"],
         offerings: &[
-            ProviderOffering::chat("https://api.hunyuan.cloud.tencent.com/v1"),
-            ProviderOffering::anthropic("https://api.hunyuan.cloud.tencent.com/anthropic"),
+            ProviderOffering::chat("https://tokenhub.tencentmaas.com/v1"),
+            ProviderOffering::anthropic("https://tokenhub.tencentmaas.com"),
         ],
         plans: &[],
     },
@@ -677,13 +701,15 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.longcat",
         category: ProviderCategory::China,
         keyless: false,
-        key_url: Some("https://longcat.chat/platform"),
+        key_url: Some("https://longcat.chat/platform/"),
         doc_url: Some("https://longcat.chat/platform/docs/zh/api-docs"),
         badge: "L",
         catalog_provider_ids: &["longcat"],
         offerings: &[
             // 官方《API 概述》：OpenAI 兼容 POST /openai/v1/chat/completions
             ProviderOffering::chat("https://api.longcat.chat/openai/v1"),
+            // 官方：Responses API POST /openai/v1/responses（与 chat 同 base）
+            ProviderOffering::responses("https://api.longcat.chat/openai/v1"),
             // 官方《API 概述》：Anthropic 兼容 POST /anthropic/v1/messages
             ProviderOffering::anthropic("https://api.longcat.chat/anthropic"),
         ],
@@ -739,6 +765,9 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         badge: "书",
         catalog_provider_ids: &[],
         offerings: &[
+            // 官方《服务迁移说明》：2026-11-09 起原入口只保留 Intern-S2（其他 model id
+            // 自动转发），**2027-01-26 原入口停用**，服务迁往「书生·端砚」。
+            // 端点本身仍有效，届时改到新平台即可。
             // 官方《Chat》：OpenAI 兼容 base 含 /api/v1
             ProviderOffering::chat("https://chat.intern-ai.org.cn/api/v1"),
             // 官方《接入 Claude Code》：POST /v1/messages，且官方明确用 x-api-key
@@ -752,7 +781,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::China,
         keyless: false,
         key_url: Some("https://console.huaweicloud.com/modelarts/"),
-        doc_url: Some("https://support.huaweicloud.com/model-call-maas/"),
+        doc_url: Some("https://support.huaweicloud.com/maas/index.html"),
         badge: "华",
         catalog_provider_ids: &[],
         offerings: &[
@@ -791,8 +820,9 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         catalog_provider_ids: &[],
         offerings: &[
             // 官方 OpenAI SDK 示例：base_url = https://api.ant-ling.com/v1
-            // 官方 API 参考只列 OpenAI 兼容，没有 Anthropic 面 → 不声明
             ProviderOffering::chat("https://api.ant-ling.com/v1"),
+            // 官方 API 参考《chat/anthropic》：POST /anthropic/v1/messages
+            ProviderOffering::anthropic("https://api.ant-ling.com/anthropic"),
         ],
         plans: &[],
     },
@@ -820,12 +850,14 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Official,
         keyless: false,
         key_url: Some("https://platform.openai.com/api-keys"),
-        doc_url: Some("https://platform.openai.com/docs"),
+        doc_url: Some("https://developers.openai.com/api/docs"),
         badge: "O",
         catalog_provider_ids: &["openai"],
         offerings: &[
-            ProviderOffering::chat("https://api.openai.com/v1"),
+            // 官方现推荐新项目用 Responses；Chat Completions 未弃用、无下线日期，
+            // 所以两条都保留，但 Responses 放在首位作为默认。
             ProviderOffering::responses("https://api.openai.com/v1"),
+            ProviderOffering::chat("https://api.openai.com/v1"),
         ],
         plans: &[],
     },
@@ -834,8 +866,8 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.anthropic",
         category: ProviderCategory::Official,
         keyless: false,
-        key_url: Some("https://console.anthropic.com/settings/keys"),
-        doc_url: Some("https://docs.anthropic.com"),
+        key_url: Some("https://platform.claude.com/settings/keys"),
+        doc_url: Some("https://platform.claude.com/docs/en/home"),
         badge: "A",
         catalog_provider_ids: &["anthropic"],
         offerings: &[
@@ -852,7 +884,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Official,
         keyless: false,
         key_url: Some("https://aistudio.google.com/app/apikey"),
-        doc_url: Some("https://ai.google.dev/gemini-api/docs"),
+        doc_url: Some("https://aistudio.google.com/docs"),
         badge: "G",
         catalog_provider_ids: &["google"],
         offerings: &[
@@ -867,14 +899,15 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.xai",
         category: ProviderCategory::Official,
         keyless: false,
-        key_url: Some("https://console.x.ai"),
-        doc_url: Some("https://docs.x.ai"),
+        key_url: Some("https://console.x.ai/home"),
+        doc_url: Some("https://docs.x.ai/overview"),
         badge: "X",
         catalog_provider_ids: &["xai"],
         offerings: &[
-            ProviderOffering::chat("https://api.x.ai/v1"),
-            // 官方《Inference API — Responses》：POST /v1/responses
+            // 官方对比表把 Chat Completions 标为 "Deprecated / legacy"：新能力先进
+            // Responses。因此 Responses 放首位作默认，Chat 仍保留可用（未公布下线日期）。
             ProviderOffering::responses("https://api.x.ai/v1"),
+            ProviderOffering::chat("https://api.x.ai/v1"),
         ],
         plans: &[],
     },
@@ -887,7 +920,11 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         doc_url: Some("https://docs.mistral.ai"),
         badge: "M",
         catalog_provider_ids: &["mistral"],
-        offerings: &[ProviderOffering::chat("https://api.mistral.ai/v1")],
+        offerings: &[
+            ProviderOffering::chat("https://api.mistral.ai/v1"),
+            // 官方《Responses》（public preview，stateless）：POST /v1/responses
+            ProviderOffering::responses("https://api.mistral.ai/v1"),
+        ],
         plans: &[],
     },
     ProviderPreset {
@@ -912,16 +949,18 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Official,
         keyless: false,
         key_url: Some("https://www.perplexity.ai/settings/api"),
-        doc_url: Some("https://docs.perplexity.ai"),
+        doc_url: Some("https://docs.perplexity.ai/docs/getting-started/overview"),
         badge: "P",
         catalog_provider_ids: &["perplexity"],
         offerings: &[
-            // 官方 Quickstart 现在的 OpenAI 兼容 base 是 Router：.../router/v1。
-            // 旧的 https://api.perplexity.ai + /chat/completions 仍能通（实测无鉴权
-            // 返回 401 而非 404），但已不在文档里；老账号可以自己改回这个端点。
+            // 官方 2026-09-27 起结束 Sonar 的 Chat Completions 支持：
+            //   · Responses 走新的 Agent API（base .../v1，规范端点 /v1/agent，
+            //     /v1/responses 为官方别名）——放首位作默认；
+            //   · Chat / Messages 仍走 Router（官方称 "the old /router/v1 base URL
+            //     keeps working"）；Orchestrator（/orchestrator/v1）是其 private
+            //     preview 继任者，等 GA 再切。
+            ProviderOffering::responses("https://api.perplexity.ai/v1"),
             ProviderOffering::chat("https://api.perplexity.ai/router/v1"),
-            ProviderOffering::responses("https://api.perplexity.ai/router/v1"),
-            // 官方《Create Messages》：POST /router/v1/messages（Anthropic 协议）
             ProviderOffering::anthropic("https://api.perplexity.ai/router"),
         ],
         plans: &[],
@@ -933,7 +972,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Gateway,
         keyless: false,
         key_url: Some("https://cloud.siliconflow.cn/account/ak"),
-        doc_url: Some("https://docs.siliconflow.cn"),
+        doc_url: Some("https://docs.siliconflow.cn/docs/userguide/introduction"),
         badge: "硅",
         catalog_provider_ids: &["siliconflow", "siliconflow-cn"],
         offerings: &[
@@ -971,7 +1010,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Gateway,
         keyless: false,
         key_url: Some("https://openrouter.ai/keys"),
-        doc_url: Some("https://openrouter.ai/docs"),
+        doc_url: Some("https://openrouter.ai/docs/quickstart"),
         badge: "OR",
         catalog_provider_ids: &["openrouter"],
         offerings: &[
@@ -988,12 +1027,16 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Gateway,
         keyless: false,
         key_url: Some("https://api.together.xyz/settings/api-keys"),
-        doc_url: Some("https://docs.together.ai"),
+        doc_url: Some("https://docs.together.ai/intro"),
         badge: "T",
         catalog_provider_ids: &["togetherai"],
         offerings: &[
-            // 官方现行文档只用 api.together.ai；旧的 api.together.xyz 在文档中已不再出现
+            // 官方现行文档只用 api.together.ai；旧的 api.together.xyz 在文档中已不再出现。
             ProviderOffering::chat("https://api.together.ai/v1"),
+            // 2026-11-03 官方上线 Responses 与 Messages（Anthropic）：
+            // Responses 同 base；Anthropic 的 base 不带 /v1（SDK 自补 /v1/messages）
+            ProviderOffering::responses("https://api.together.ai/v1"),
+            ProviderOffering::anthropic("https://api.together.ai"),
         ],
         plans: &[],
     },
@@ -1002,8 +1045,8 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         name_key: "provider.fireworks",
         category: ProviderCategory::Gateway,
         keyless: false,
-        key_url: Some("https://fireworks.ai/account/api-keys"),
-        doc_url: Some("https://docs.fireworks.ai"),
+        key_url: Some("https://app.fireworks.ai/settings/users/api-keys"),
+        doc_url: Some("https://docs.fireworks.ai/getting-started/introduction"),
         badge: "F",
         catalog_provider_ids: &["fireworks", "fireworks-ai"],
         offerings: &[
@@ -1019,7 +1062,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Gateway,
         keyless: false,
         key_url: Some("https://build.nvidia.com/settings/api-keys"),
-        doc_url: Some("https://docs.nvidia.com/nim"),
+        doc_url: Some("https://docs.api.nvidia.com/nim/reference/llm-apis"),
         badge: "N",
         catalog_provider_ids: &["nvidia"],
         offerings: &[ProviderOffering::chat(
@@ -1062,7 +1105,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Local,
         keyless: true,
         key_url: None,
-        doc_url: Some("https://lmstudio.ai/docs/app/api"),
+        doc_url: Some("https://lmstudio.ai/docs/developer/openai-compat"),
         badge: "LM",
         catalog_provider_ids: &[],
         offerings: &[
@@ -1078,7 +1121,7 @@ pub const BUILTIN_PRESETS: &[ProviderPreset] = &[
         category: ProviderCategory::Local,
         keyless: true,
         key_url: None,
-        doc_url: Some("https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html"),
+        doc_url: Some("https://docs.vllm.ai/en/latest/serving/online_serving/"),
         badge: "vL",
         catalog_provider_ids: &[],
         offerings: &[
