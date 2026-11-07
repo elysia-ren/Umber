@@ -89,6 +89,9 @@ struct RealBackend {
     /// 但「推荐」应该先给新的。没有这份数据就只能按上下文窗口排，
     /// 结果是一堆早就退役的型号顶在最前面。
     release_dates: HashMap<String, String>,
+    /// canonical_id（规范化）→ family（模型系列）。
+    /// 推荐列表用它做「同一系列只留最新」的去重。
+    families: HashMap<String, String>,
     /// 运行时本地库（配置落盘）与凭据回退链（密钥进系统钥匙串）。
     store: std::sync::Mutex<Option<StoreBundle>>,
 }
@@ -171,6 +174,7 @@ impl RealBackend {
             catalog,
             provider_models: load_provider_models_from_env(),
             release_dates: load_release_dates_from_env(),
+            families: load_families_from_env(),
             store: std::sync::Mutex::new(store),
         }
     }
@@ -406,8 +410,49 @@ impl SettingsBackend for RealBackend {
         ids.sort();
         ids.dedup();
 
+        // 0) 只推荐「当前还在卖的那一批」，而不是把历史全列出来：
+        //    · 同一个 family 只保留发布日期最新的（同日期并列保留，如 flash / flash-pro）；
+        //    · 再按该厂商最新发布日期往前 6 个月截断；
+        //    · 没有日期的型号，在这家有 >=3 条带日期型号时不推荐（数据够用就别猜）。
+        //    目录本身仍然保留全部历史（手填旧 ID 时能查到上下文/价格）。
+        let normalize = umber_model::normalize_model_id;
+        let date_of = |id: &str| self.release_dates.get(&normalize(id)).cloned();
+        let dated_count = ids.iter().filter(|id| date_of(id).is_some()).count();
+        if let Some(newest) = ids.iter().filter_map(|id| date_of(id)).max() {
+            let cutoff = months_before(&newest, 6);
+            // family → 该 family 内最新的发布日期
+            let mut family_newest: HashMap<String, String> = HashMap::new();
+            for id in &ids {
+                if let (Some(family), Some(date)) =
+                    (self.families.get(&normalize(id)).cloned(), date_of(id))
+                {
+                    let slot = family_newest.entry(family).or_insert_with(|| date.clone());
+                    if date > *slot {
+                        *slot = date;
+                    }
+                }
+            }
+            ids.retain(|id| {
+                let key = normalize(id);
+                let Some(date) = date_of(id) else {
+                    return dated_count < 3;
+                };
+                if let Some(cutoff) = &cutoff {
+                    if date < *cutoff {
+                        return false;
+                    }
+                }
+                match self.families.get(&key) {
+                    Some(family) => family_newest
+                        .get(family)
+                        .map(|newest_in_family| *newest_in_family == date)
+                        .unwrap_or(true),
+                    None => true,
+                }
+            });
+        }
+
         // 排序：**先按发布日期倒序**（新的在前），同日期再比上下文窗口，最后按名字。
-        // 之前只按窗口排序，导致退役型号（窗口也很大）长期占据首屏。
         ids.sort_by(|a, b| {
             let date = |id: &str| {
                 self.release_dates
@@ -672,6 +717,41 @@ fn load_provider_models_from_env() -> HashMap<String, Vec<String>> {
             .push(deployment.model_id.clone());
     }
     index
+}
+
+/// 由 ISO 日期（`YYYY-MM-DD`）回退若干个月，返回 `YYYY-MM` 前缀用于比较。
+fn months_before(date: &str, months: i32) -> Option<String> {
+    let year: i32 = date.get(0..4)?.parse().ok()?;
+    let month: i32 = date.get(5..7)?.parse().ok()?;
+    let total = year * 12 + (month - 1) - months;
+    Some(format!("{:04}-{:02}", total / 12, total % 12 + 1))
+}
+
+/// 从构建产物加载 canonical_id → family（推荐去重用）。
+fn load_families_from_env() -> HashMap<String, String> {
+    let Ok(path) = std::env::var("UMER_DEMO_CATALOG") else {
+        return Default::default();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Default::default();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Default::default();
+    };
+    let catalog_value = value.get("catalog").cloned().unwrap_or(value);
+    let Ok(catalog) = serde_json::from_value::<Catalog>(catalog_value) else {
+        return Default::default();
+    };
+    let mut families = HashMap::new();
+    for profile in catalog.entries {
+        if !profile.identity.family.is_empty() {
+            families.insert(
+                umber_model::normalize_model_id(&profile.identity.canonical_id),
+                profile.identity.family,
+            );
+        }
+    }
+    families
 }
 
 /// 从构建产物加载 canonical_id → 发布日期（推荐排序用）。

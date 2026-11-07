@@ -432,8 +432,8 @@ pub fn resolve_group(group: &[FieldCandidates]) -> (ModelProfile, bool) {
         .iter()
         .flat_map(|c| c.max_output_tokens.clone())
         .collect();
-    // 已废弃模型在上下文上通常也是旧的：标记冲突但不影响裁决
-    let _ = deprecated;
+    // 已废弃模型在上下文上通常也是旧的：标记冲突但不影响裁决；
+    // 但弃用状态本身必须带进 Catalog —— 推荐列表靠它把已下线的名字过滤掉。
     // 多来源日期取**最新**的（ISO-8601 可直接字典序比较）。
     let release_date = group.iter().filter_map(|c| c.release_date.clone()).max();
 
@@ -465,6 +465,7 @@ pub fn resolve_group(group: &[FieldCandidates]) -> (ModelProfile, bool) {
         parameter_support: ParameterSupport::with_supported(&parameters),
         pricing: Some(pricing),
         release_date,
+        deprecated,
         compatibility: CompatibilityProfile::default(),
         evidence,
     };

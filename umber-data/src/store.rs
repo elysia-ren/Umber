@@ -411,6 +411,7 @@ mod tests {
             parameter_support: ParameterSupport::default(),
             pricing: None,
             release_date: None,
+            deprecated: false,
             compatibility: Default::default(),
             evidence: vec![],
         }

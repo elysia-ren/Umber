@@ -49,6 +49,14 @@ pub struct ModelProfile {
     /// 上游给出的发布日期（ISO-8601）。推荐列表按它倒序，旧型号自然沉底。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_date: Option<String>,
+    /// 上游标记「弃用日期已过」（LiteLLM 的 deprecation_date）。
+    ///
+    /// 注意：跨来源合并时只要**任一**来源标了弃用就会为 true，可能偏保守
+    /// （例如某云厂商自己下线了某个 Deployment，却把整个身份标脏）。
+    /// 因此当前只作为知识保留，**不用于推荐过滤**——推荐用的是
+    /// 「同 family 只留最新 + 该厂商近 6 个月」这条更稳的规则。
+    #[serde(default)]
+    pub deprecated: bool,
     #[serde(default)]
     pub compatibility: CompatibilityProfile,
     #[serde(default)]
@@ -234,6 +242,7 @@ mod tests {
             parameter_support: ParameterSupport::default(),
             pricing: None,
             release_date: None,
+            deprecated: false,
             compatibility: CompatibilityProfile::default(),
             evidence: vec![],
         }

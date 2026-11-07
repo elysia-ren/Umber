@@ -85,6 +85,7 @@ impl ModelRegistry {
                 parameter_support: Default::default(),
                 pricing: None,
                 release_date: None,
+                deprecated: false,
                 compatibility: Default::default(),
                 evidence: vec![],
             });
@@ -186,6 +187,7 @@ mod tests {
             parameter_support: Default::default(),
             pricing: None,
             release_date: None,
+            deprecated: false,
             compatibility: Default::default(),
             evidence: vec![],
         };
