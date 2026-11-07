@@ -111,6 +111,7 @@ fn host_journey_from_settings_to_streamed_answer() {
             structured_output: Default::default(),
             parameter_support: Default::default(),
             pricing: None,
+            release_date: None,
             compatibility: Default::default(),
             evidence: vec![],
         }],

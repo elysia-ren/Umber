@@ -81,6 +81,8 @@ pub struct FieldCandidates {
     pub pricing_web_search: Vec<FieldCandidate>,
     pub source_urls: Vec<String>,
     pub deprecated: bool,
+    /// 上游给出的发布日期（多来源取最新）。
+    pub release_date: Option<String>,
     pub evidence: Vec<Evidence>,
     pub aliases: Vec<String>,
 }
@@ -211,6 +213,7 @@ pub fn normalize(record: &RawModelRecord) -> FieldCandidates {
         pricing_web_search,
         source_urls: record.source_url.iter().cloned().collect(),
         deprecated: record.deprecated,
+        release_date: record.release_date.clone(),
         evidence,
         aliases: record.raw_aliases.clone(),
     }
@@ -431,6 +434,8 @@ pub fn resolve_group(group: &[FieldCandidates]) -> (ModelProfile, bool) {
         .collect();
     // 已废弃模型在上下文上通常也是旧的：标记冲突但不影响裁决
     let _ = deprecated;
+    // 多来源日期取**最新**的（ISO-8601 可直接字典序比较）。
+    let release_date = group.iter().filter_map(|c| c.release_date.clone()).max();
 
     let profile = ModelProfile {
         identity,
@@ -459,6 +464,7 @@ pub fn resolve_group(group: &[FieldCandidates]) -> (ModelProfile, bool) {
         structured_output: Default::default(),
         parameter_support: ParameterSupport::with_supported(&parameters),
         pricing: Some(pricing),
+        release_date,
         compatibility: CompatibilityProfile::default(),
         evidence,
     };

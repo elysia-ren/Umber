@@ -410,6 +410,7 @@ mod tests {
             structured_output: Default::default(),
             parameter_support: ParameterSupport::default(),
             pricing: None,
+            release_date: None,
             compatibility: Default::default(),
             evidence: vec![],
         }

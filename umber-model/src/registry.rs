@@ -84,6 +84,7 @@ impl ModelRegistry {
                 structured_output: Default::default(),
                 parameter_support: Default::default(),
                 pricing: None,
+                release_date: None,
                 compatibility: Default::default(),
                 evidence: vec![],
             });
@@ -184,6 +185,7 @@ mod tests {
             structured_output: Default::default(),
             parameter_support: Default::default(),
             pricing: None,
+            release_date: None,
             compatibility: Default::default(),
             evidence: vec![],
         };

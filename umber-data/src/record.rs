@@ -112,6 +112,11 @@ pub struct RawModelRecord {
     pub supported_parameters: Vec<String>,
     pub pricing: RawPricing,
     pub deprecated: bool,
+    /// 上游给出的发布日期（ISO-8601，如 `2026-09-10`）。
+    ///
+    /// 预置**不硬编码模型名**，所以"哪些模型是新的"只能靠这份数据判断：
+    /// 推荐列表按它倒序，旧型号自然沉底（而不是靠一份手工白名单）。
+    pub release_date: Option<String>,
     /// 上游给出的原始数据来源链接（审计用）。
     pub source_url: Option<String>,
     /// 上游声明的别名（目前仅官方覆盖层提供）——用于身份匹配的 alias 表（§9.1）。
@@ -141,6 +146,7 @@ impl RawModelRecord {
             supported_parameters: Vec::new(),
             pricing: RawPricing::default(),
             deprecated: false,
+            release_date: None,
             source_url: None,
             raw_aliases: Vec::new(),
             retrieved_at_unix: now_unix,

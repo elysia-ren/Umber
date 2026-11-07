@@ -108,6 +108,11 @@ impl SourceAdapter for ModelsDevAdapter {
                     .and_then(|d| d.as_str())
                     .map(str::to_string);
                 record.source_url = provider_doc.clone();
+                // 生命周期元数据：推荐列表靠它把旧型号沉底（预置不硬编码模型名）
+                record.release_date = model
+                    .get("release_date")
+                    .and_then(|d| d.as_str())
+                    .map(str::to_string);
 
                 record.context_window = model
                     .get("limit")
@@ -196,7 +201,8 @@ mod tests {
                         "structured_output": true,
                         "modalities": {"input":["text"],"output":["text"]},
                         "limit": {"context": 1000000, "output": 131072},
-                        "cost": {"input": 1.4, "output": 4.4, "cache_read": 0.26}
+                        "cost": {"input": 1.4, "output": 4.4, "cache_read": 0.26},
+                        "release_date": "2026-09-10"
                     }
                 }
             }
@@ -212,6 +218,8 @@ mod tests {
         assert_eq!(r.pricing.input_per_mtok, Some(1.4));
         assert_eq!(r.pricing.cached_input_per_mtok, Some(0.26));
         assert_eq!(r.capabilities.tool_call, Some(true));
+        // 发布日期是推荐排序的唯一依据（预置不硬编码模型名），必须解析出来
+        assert_eq!(r.release_date.as_deref(), Some("2026-09-10"));
         assert_eq!(r.capabilities.reasoning, Some(true));
         // 机制名原样保留，不推断档位
         assert_eq!(r.reasoning_effort_labels, vec!["toggle", "budget_tokens"]);

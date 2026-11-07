@@ -46,6 +46,9 @@ pub struct ModelProfile {
     pub parameter_support: ParameterSupport,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pricing: Option<Pricing>,
+    /// 上游给出的发布日期（ISO-8601）。推荐列表按它倒序，旧型号自然沉底。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_date: Option<String>,
     #[serde(default)]
     pub compatibility: CompatibilityProfile,
     #[serde(default)]
@@ -230,6 +233,7 @@ mod tests {
             structured_output: StructuredOutputInfo::default(),
             parameter_support: ParameterSupport::default(),
             pricing: None,
+            release_date: None,
             compatibility: CompatibilityProfile::default(),
             evidence: vec![],
         }

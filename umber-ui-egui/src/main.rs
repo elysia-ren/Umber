@@ -83,6 +83,12 @@ struct RealBackend {
     /// provider → 该 provider 暴露的模型 ID（规格 X.18 的 Deployment 表）。
     /// 推荐模型据此得出——**查表，不是硬编码模型名**。
     provider_models: HashMap<String, Vec<String>>,
+    /// canonical_id（规范化）→ 发布日期（ISO-8601）。
+    ///
+    /// 推荐列表按它倒序：上游目录会把退役型号也列着（当作历史知识），
+    /// 但「推荐」应该先给新的。没有这份数据就只能按上下文窗口排，
+    /// 结果是一堆早就退役的型号顶在最前面。
+    release_dates: HashMap<String, String>,
     /// 运行时本地库（配置落盘）与凭据回退链（密钥进系统钥匙串）。
     store: std::sync::Mutex<Option<StoreBundle>>,
 }
@@ -164,6 +170,7 @@ impl RealBackend {
             transport: Arc::new(RealHttpTransport::new(HttpConfig::default())),
             catalog,
             provider_models: load_provider_models_from_env(),
+            release_dates: load_release_dates_from_env(),
             store: std::sync::Mutex::new(store),
         }
     }
@@ -399,14 +406,24 @@ impl SettingsBackend for RealBackend {
         ids.sort();
         ids.dedup();
 
-        // 排序：上下文窗口大的在前（通常更强/更新），再按名字，保证稳定
+        // 排序：**先按发布日期倒序**（新的在前），同日期再比上下文窗口，最后按名字。
+        // 之前只按窗口排序，导致退役型号（窗口也很大）长期占据首屏。
         ids.sort_by(|a, b| {
+            let date = |id: &str| {
+                self.release_dates
+                    .get(&umber_model::normalize_model_id(id))
+                    .cloned()
+                    .unwrap_or_default()
+            };
             let ctx = |id: &str| {
                 crate::lookup(&self.catalog, id)
                     .and_then(|info| info.limits.context_window)
                     .unwrap_or(0)
             };
-            ctx(b).cmp(&ctx(a)).then_with(|| a.cmp(b))
+            date(b)
+                .cmp(&date(a))
+                .then_with(|| ctx(b).cmp(&ctx(a)))
+                .then_with(|| a.cmp(b))
         });
 
         ids.into_iter()
@@ -655,6 +672,33 @@ fn load_provider_models_from_env() -> HashMap<String, Vec<String>> {
             .push(deployment.model_id.clone());
     }
     index
+}
+
+/// 从构建产物加载 canonical_id → 发布日期（推荐排序用）。
+fn load_release_dates_from_env() -> HashMap<String, String> {
+    let Ok(path) = std::env::var("UMER_DEMO_CATALOG") else {
+        return HashMap::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return HashMap::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return HashMap::new();
+    };
+    let catalog_value = value.get("catalog").cloned().unwrap_or(value);
+    let Ok(catalog) = serde_json::from_value::<Catalog>(catalog_value) else {
+        return HashMap::new();
+    };
+    let mut dates = HashMap::new();
+    for profile in catalog.entries {
+        if let Some(date) = profile.release_date {
+            dates.insert(
+                umber_model::normalize_model_id(&profile.identity.canonical_id),
+                date,
+            );
+        }
+    }
+    dates
 }
 
 /// `--selftest`：不开窗口，直接用真实 Local DB + 凭据回退链走一遍
